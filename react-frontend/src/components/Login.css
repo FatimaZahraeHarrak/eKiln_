@@ -1,0 +1,32 @@
+.login-wrapper {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    background-color: #f3f6f9;
+  }
+  
+  .login-box {
+    background: white;
+    padding: 2rem 2.5rem;
+    border-radius: 10px;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+    text-align: center;
+    width: 350px;
+  }
+  
+  .login-logo {
+    width: 120px;
+    margin-bottom: 1.5rem;
+  }
+  
+  .login-input {
+    width: 100%;
+    margin-bottom: 1rem;
+  }
+  
+  .login-button {
+    width: 100%;
+    margin-top: 1rem;
+  }
+  

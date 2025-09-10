@@ -1,0 +1,47 @@
+pipelines:
+  branches:
+    main:
+      - step:
+          name: Build Laravel + React
+          image: laravelsail/php82-composer
+          caches:
+            - node
+          script:
+            # Install system dependencies
+            - apt-get update && apt-get install -y zip unzip curl gnupg nodejs npm
+
+            # Build React
+            - cd react-frontend
+            - npm install
+            - npm run build
+            - cd ..
+
+            # Move React build to Laravel public folder
+            - cp -r react-frontend/dist/* backend/public/
+
+            # Install Laravel dependencies
+            - cd backend
+            - composer install --no-dev --optimize-autoloader
+            - cd ..
+
+            # Create deployment zip
+            - zip -r release.zip backend
+
+            # Debug: List contents of the zip
+            - echo "Contents of release.zip:"
+            - unzip -l release.zip
+
+          artifacts:
+            - release.zip
+
+      - step:
+          name: Deploy to Azure
+          script:
+            - pipe: microsoft/azure-web-apps-deploy:1.0.0
+              variables:
+                AZURE_APP_ID: $AZURE_APP_ID
+                AZURE_PASSWORD: $AZURE_PASSWORD
+                AZURE_TENANT_ID: $AZURE_TENANT_ID
+                AZURE_RESOURCE_GROUP: $AZURE_RESOURCE_GROUP
+                AZURE_APP_NAME: 'az-emea-test-ekiln-app'
+                ZIP_FILE: 'release.zip'
