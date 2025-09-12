@@ -64,17 +64,54 @@ class ChargementController extends Controller
     return response()->json(['message' => 'Chargement créé avec succès'], 201);
 }
 
-public function mesChargements()
-    {
-        $user = Auth::user();
+public function mesChargements() {
+    $user = Auth::user();
+    $now = now(); // moment actuel
+    $hour = $now->hour;
+    
 
-        $chargements = Chargement::with(['four', 'details.famille','wagon'])
-            ->where('id_user', $user->id_user)
-            ->orderBy('datetime_chargement', 'desc')
-            ->get();
-
-        return response()->json($chargements);
+    // Définir le début et la fin du shift
+    if ($hour >= 6 && $hour < 14) {
+        // Shift 1 : 06:00 → 14:00
+        $start = $now->copy()->setHour(6)->setMinute(0)->setSecond(0);
+        $end = $now->copy()->setHour(14)->setMinute(0)->setSecond(0);
+    } elseif ($hour >= 14 && $hour < 22) {
+        // Shift 2 : 14:00 → 22:00
+        $start = $now->copy()->setHour(14)->setMinute(0)->setSecond(0);
+        $end = $now->copy()->setHour(22)->setMinute(0)->setSecond(0);
+    } else {
+        // Shift 3 : 22:00 → 06:00 du lendemain
+        if ($hour >= 22) {
+            $start = $now->copy()->setHour(22)->setMinute(0)->setSecond(0);
+            $end = $now->copy()->addDay()->setHour(6)->setMinute(0)->setSecond(0);
+        } else {
+            // Heure entre 00:00 et 05:59 (shift 3 du jour précédent)
+            $start = $now->copy()->subDay()->setHour(22)->setMinute(0)->setSecond(0);
+            $end = $now->copy()->setHour(6)->setMinute(0)->setSecond(0);
+        }
     }
+
+    // Récupérer les chargements pour le shift
+    $chargements = Chargement::with(['four', 'details.famille', 'wagon'])
+        ->where('id_user', $user->id_user)
+        ->whereBetween('datetime_chargement', [$start, $end])
+        ->orderBy('datetime_chargement', 'desc')
+        ->get();
+
+    // Calculer les totaux
+    $totalPieces = $chargements->sum(function($c) {
+        return $c->details->sum('quantite');
+    });
+    $chargementCount = $chargements->count();
+
+    // Stocker les totaux dans la session
+    session([
+        'total_pieces' => $totalPieces,
+        'chargement_count' => $chargementCount
+    ]);
+
+    return response()->json($chargements);
+}
 
 
 
@@ -513,6 +550,7 @@ public function getPopupDetails($id)
                     ];
                 }),
                 'user' => [
+                    'matricule'=>$chargement->user->matricule,
                     'nom' => $chargement->user->nom ?? 'Unknown',
                     'prenom' => $chargement->user->prenom ?? ''
                 ]
