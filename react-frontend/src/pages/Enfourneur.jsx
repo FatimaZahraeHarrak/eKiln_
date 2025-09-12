@@ -359,34 +359,89 @@ function Enfourneur() {
                 Détails du chargement
               </Typography>
               
-              <TableContainer component={Paper} variant="outlined">
-                <Table aria-label="details table">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Famille</TableCell>
-                      <TableCell width={150} align="center">Quantité</TableCell>
-                    </TableRow>
-                  </TableHead>
+               <TableContainer component={Paper} variant="outlined">
+             
+                <Table aria-label="details table" size="small">
                   <TableBody>
-                    {familles.map((famille) => (
-                      <TableRow key={famille.id_famille}>
-                        <TableCell>{famille.nom_famille}</TableCell>
-                        <TableCell>
-                          <TextField
-                            type="number"
-                            variant="outlined"
-                            size="small"
-                            InputProps={{ inputProps: { min: 0 } }}
-                            value={quantites[famille.id_famille] || 0}
-                            onChange={(e) => handleQuantiteChange(famille.id_famille, e.target.value)}
-                            fullWidth
-                          />
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    {(() => {
+                      // 1 Trier les familles alphabétiquement
+                      const famillesTriees = [...familles].sort((a, b) =>
+                        a.nom_famille.localeCompare(b.nom_famille)
+                      );
+
+                      // 2 Découper en deux colonnes
+                      const mid = Math.ceil(famillesTriees.length / 2);
+                      const col1 = famillesTriees.slice(0, mid);
+                      const col2 = famillesTriees.slice(mid);
+
+                      // 3 Construire les lignes
+                      return col1.map((famille1, rowIndex) => {
+                        const famille2 = col2[rowIndex];
+                        return (
+                          <TableRow key={rowIndex}>
+                            {/* Colonne 1 */}
+                            <TableCell>{famille1.nom_famille}</TableCell>
+                            <TableCell>
+                            <TextField
+                              type="text"
+                              variant="outlined"
+                              size="small"
+                              value={quantites[famille1.id_famille] === 0 ? "0" : quantites[famille1.id_famille]}
+                              InputProps={{ inputProps: { pattern: "[0-9]*", inputMode: "numeric" } }}
+                              onFocus={(e) => {
+                                if (e.target.value === "0") e.target.value = "";
+                              }}
+                              onChange={(e) => {
+                                // filtrer pour garder uniquement les chiffres
+                                const val = e.target.value.replace(/[^0-9]/g, "");
+                                handleQuantiteChange(famille1.id_famille, val === "" ? 0 : Number(val));
+                              }}
+                              onBlur={(e) => {
+                                if (e.target.value === "") handleQuantiteChange(famille1.id_famille, 0);
+                              }}
+                              fullWidth
+                            />
+                            </TableCell>
+                            {/* Colonne 2 (si existe) */}
+                            {famille2 ? (
+                              <>
+                                <TableCell>{famille2.nom_famille}</TableCell>
+                                <TableCell>
+                                  <TextField
+                                    type="text"
+                                    variant="outlined"
+                                    size="small"
+                                    value={quantites[famille2.id_famille] === 0 ? "0" : quantites[famille2.id_famille]}
+                                    InputProps={{ inputProps: { pattern: "[0-9]*", inputMode: "numeric" } }}
+                                    onFocus={(e) => {
+                                      if (e.target.value === "0") e.target.value = "";
+                                    }}
+                                    onChange={(e) => {
+                                      // filtrer pour garder uniquement les chiffres
+                                      const val = e.target.value.replace(/[^0-9]/g, "");
+                                      handleQuantiteChange(famille2.id_famille, val === "" ? 0 : Number(val));
+                                    }}
+                                    onBlur={(e) => {
+                                      if (e.target.value === "") handleQuantiteChange(famille2.id_famille, 0);
+                                    }}
+                                    fullWidth
+                                  />
+                                </TableCell>
+                              </>
+                            ) : (
+                              <>
+                                <TableCell></TableCell>
+                                <TableCell></TableCell>
+                              </>
+                            )}
+                          </TableRow>
+                        );
+                      });
+                    })()}
                   </TableBody>
                 </Table>
               </TableContainer>
+              
 
               <Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end' }}>
                 <Button
