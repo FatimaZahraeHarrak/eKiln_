@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import Alert from '@mui/material/Alert';
 import Divider from '@mui/material/Divider';
@@ -62,7 +62,6 @@ import AffectationContent from '../components/AffectationContent';
 import SettingsIcon from '@mui/icons-material/Settings';
 import { Edit, Check, X, Settings, Clock, Zap, AlertCircle, CheckCircle2, XCircle } from 'lucide-react';
 import WagonVisualization from './WagonVisualization';
-
 
 // the sidebar
 const NAVIGATION = [
@@ -417,6 +416,10 @@ const ChargementContent = () => {
   const [selectedChargement, setSelectedChargement] = useState(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [error, setError] = useState(null);
+  const [totalPieces, setTotalPieces] = useState(0); // Nouvel état pour le total des pièces
+  const [chargementCount, setChargementCount] = useState(0); // Nouvel état pour le nombre de chargements
+  const wagonRef = useRef(null);
+  const messageRef = useRef(null);
 
   useEffect(() => {
     const fetchInitialData = async () => {
@@ -497,8 +500,16 @@ const ChargementContent = () => {
       await axios.post("http://localhost:8000/api/chargements", chargementData, {
         headers: { Authorization: `Bearer ${token}`, 'Accept': 'application/json' },
       });
-
+      // Mettre à jour les chargements et compteur
+      fetchChargements(false);
       setError({ severity: "success", message: "Chargement enregistré avec succès!" });
+       // Scroll vers le message après rendu
+      setTimeout(() => {
+      messageRef.current?.scrollIntoView({ behavior: "smooth" });
+         }, 50);
+
+    // Mettre le focus sur le champ Wagon
+    wagonRef.current?.focus();
       resetForm();
     } catch (error) {
       console.error("Erreur complète:", error);
@@ -513,8 +524,13 @@ const ChargementContent = () => {
       } else {
         setError("Erreur réseau ou inconnue");
       }
+    //Scroll vers le message
+   setTimeout(() => {
+    messageRef.current?.scrollIntoView({ behavior: "smooth" });
+      }, 50);
     } finally {
       setLoading(false);
+        wagonRef.current?.focus();
     }
   };
 
@@ -546,26 +562,46 @@ const ChargementContent = () => {
   }
 };
 
-  const fetchChargements = async () => {
-    setRecapLoading(true);
-    setError(null);
-    try {
-      const token = localStorage.getItem("token");
-      const response = await axios.get("http://localhost:8000/api/chargements/mes-chargements", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      setChargements(response.data);
+  const fetchChargements = async (toggleRecap = false) => {
+  setRecapLoading(true);
+  setError(null);
+
+  try {
+    const token = localStorage.getItem("token");
+    const response = await axios.get(
+      "http://localhost:8000/api/chargements/mes-chargements",
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+
+    const chargements = response.data;
+
+    const totalPieces = chargements.reduce((sum, chargement) => {
+      return sum + (chargement.details
+        ? chargement.details.reduce((detSum, detail) => detSum + detail.quantite, 0)
+        : 0);
+    }, 0);
+
+    const chargementCount = chargements.length;
+
+    setChargements(chargements);
+    setTotalPieces(totalPieces);
+    setChargementCount(chargementCount);
+
+    // toggle l'affichage seulement si demandé
+    if (toggleRecap) {
       setShowRecap(!showRecap);
-    } catch (error) {
-      console.error("Erreur lors du chargement des chargements:", error);
-      setError("Impossible de charger les chargements");
-    } finally {
-      setRecapLoading(false);
     }
-  };
 
-  
-
+  } catch (error) {
+    console.error("Erreur lors du chargement des chargements:", error);
+    setError("Impossible de charger les chargements");
+  } finally {
+    setRecapLoading(false);
+  }
+};
+useEffect(() => {
+    fetchChargements(); 
+  }, []);
   const fetchChargementDetails = async (id) => {
     if (!id) {
       console.error("ID de chargement non fourni");
@@ -675,49 +711,89 @@ const ChargementContent = () => {
           </>
         ) : (
           <Box component="form" onSubmit={handleSubmit} noValidate>
-            <Grid container spacing={3}>
-              <Grid item xs={12} md={6} width="240px">
-                <Autocomplete
-                  options={wagons}
-                  getOptionLabel={(wagon) => `${wagon.num_wagon} - Statut: ${wagon.statut}`}
-                  value={wagons.find(w => w.id_wagon === selectedWagon) || null}
-                  onChange={(event, newValue) => {
-                    setSelectedWagon(newValue ? newValue.id_wagon : '');
-                  }}
-                  renderInput={(params) => (
-                    <TextField
-                      {...params}
-                      label="Wagon"
-                      required
-                      margin="normal"
-                    />
-                  )}
-                  sx={{ '& .MuiAutocomplete-input': { width: '240px' } }}
-                />
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <FormControl fullWidth margin="normal" required>
-                  <InputLabel id="four-select-label">Four</InputLabel>
-                  <Select
-                    labelId="four-select-label"
-                    id="four-select"
-                    value={selectedFour}
-                    label="Four"
-                    onChange={(e) => setSelectedFour(e.target.value)}
-                    sx={{ '& .MuiSelect-select': { width: '120px' } }}
-                  >
-                    <MenuItem value="">
-                      <em>Sélectionnez un four</em>
-                    </MenuItem>
-                    {fours.map((four) => (
-                      <MenuItem key={four.id_four} value={four.id_four}>
-                        {four.num_four} - Cadence: {four.cadence}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Grid>
-            </Grid>
+              <Grid container spacing={3}>
+                           {/* Wagon Autocomplete */}
+                           <Grid item xs={12} md={6} width="240px">
+                             <Autocomplete
+                               options={wagons}
+                               getOptionLabel={(wagon) => `${wagon.num_wagon} - Statut: ${wagon.statut}`}
+                               value={wagons.find(w => w.id_wagon === selectedWagon) || null}
+                               onChange={(event, newValue) => {
+                                 setSelectedWagon(newValue ? newValue.id_wagon : '');
+                               }}
+                               renderInput={(params) => (
+                                 <TextField
+                                   {...params}
+                                   label="Wagon"
+                                   required
+                                   margin="normal"
+                                   inputRef={wagonRef} // <- ici la vraie ref sur l'input moi 
+                                 />
+                               )}
+                               sx={{ '& .MuiAutocomplete-input': { width: '240px' } }}
+                             />
+                           </Grid>
+           
+                           {/* Four Select */}
+                           <Grid item xs={12} md={6}>
+                             <FormControl fullWidth margin="normal" required>
+                               <InputLabel id="four-select-label">Four</InputLabel>
+                               <Select
+                                 labelId="four-select-label"
+                                 id="four-select"
+                                 value={selectedFour}
+                                 label="Four"
+                                 onChange={(e) => setSelectedFour(e.target.value)}
+                                 sx={{ '& .MuiSelect-select': { width: '140px' } }}
+                               >
+                                 <MenuItem value="">
+                                   <em>Sélectionnez un four</em>
+                                 </MenuItem>
+                                 {fours.map((four) => (
+                                   <MenuItem key={four.id_four} value={four.id_four}>
+                                     {four.num_four} - Cadence: {four.cadence}
+                                   </MenuItem>
+                                 ))}
+                               </Select>
+                             </FormControl>
+                           </Grid>
+           
+                           {/* Paper Fields */}
+                           <Grid container spacing={3} justifyContent="flex-end" minWidth={"50%"}>
+                             <Grid item xs={12} md={4}>
+                               <Paper elevation={3} sx={{ p: 2, textAlign: 'center' }}>
+                                 <Typography variant="h6" gutterBottom>
+                                   Title 1
+                                 </Typography>
+                                 <Typography variant="subtitle2" color="text.secondary">
+                                   Nom
+                                 </Typography>
+                               </Paper> 
+                             </Grid>
+           
+                             <Grid item xs={12} md={4}>
+                               <Paper elevation={3} sx={{ p: 2, textAlign: 'center' }}>
+                                 <Typography variant="h6" gutterBottom>
+                                   {totalPieces}
+                                 </Typography>
+                                 <Typography variant="subtitle2" color="text.secondary">
+                                   Pièces
+                                 </Typography>
+                               </Paper>
+                             </Grid>
+           
+                             <Grid item xs={12} md={4}>
+                               <Paper elevation={3} sx={{ p: 2, textAlign: 'center' }}>
+                                 <Typography variant="h6" gutterBottom>
+                                   {chargementCount}
+                                 </Typography>
+                                 <Typography variant="subtitle2" color="text.secondary">
+                                  Chargements
+                                 </Typography>
+                               </Paper>
+                             </Grid>
+                           </Grid>
+                         </Grid>
 
             <Typography variant="h6" component="h3" sx={{ mt: 4, mb: 2 }}>
               Détails du chargement
