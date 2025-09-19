@@ -55,6 +55,8 @@ function Enfourneur() {
   const [chargementCount, setChargementCount] = useState(0); // Nouvel état pour le nombre de chargements
   const wagonRef = useRef(null);
   const messageRef = useRef(null);
+ //const [_isEditing, setIsEditing] = useState({});
+
 
   useEffect(() => {
     const fetchInitialData = async () => {
@@ -138,7 +140,7 @@ function Enfourneur() {
         await axios.post("http://localhost:8000/api/chargements", chargementData, {
             headers: { Authorization: `Bearer ${token}`, 'Accept': 'application/json' },
         });
- // Mettre à jour les chargements et compteur
+    // Mettre à jour les chargements et compteur
      fetchChargements(false);
     // Afficher le message
     setError({ severity: "success", message: "Chargement enregistré avec succès!" });
@@ -177,7 +179,7 @@ function Enfourneur() {
   const resetForm = () => {
     //setWagonNum("");
     setSelectedWagon("");
-    setSelectedFour("");
+    //setSelectedFour("");
     const resetQuantites = {};
     familles.forEach(famille => {
       resetQuantites[famille.id_famille] = 0;
@@ -252,7 +254,20 @@ useEffect(() => {
       }
     }
   };
+const fourRef = useRef(null);
+const [fourOpen, setFourOpen] = useState(false);
 
+// Ref pour savoir si le menu a déjà été ouvert une fois
+const hasOpenedFourOnce = useRef(false);
+
+// Quand le wagon change → focus + ouvrir le menu **une seule fois**
+useEffect(() => {
+  if (selectedWagon && fourRef.current && !hasOpenedFourOnce.current) {
+    fourRef.current.focus();       // focus visible
+    setFourOpen(true);             // ouvre le menu
+    hasOpenedFourOnce.current = true; // on ne le refait plus
+  }
+}, [selectedWagon]);
   const handleLogout = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("user");
@@ -385,13 +400,20 @@ useEffect(() => {
                       id="four-select"
                       value={selectedFour}
                       label="Four"
-                      onChange={(e) => setSelectedFour(e.target.value)}
+                      inputRef={fourRef}
+                      open={fourOpen}
+                      onOpen={() => setFourOpen(true)}
+                      onClose={() => setFourOpen(false)}
+                      onChange={(e) => {
+                        setSelectedFour(e.target.value);
+                        setFourOpen(false); // referme après sélection
+                      }}
                       sx={{ '& .MuiSelect-select': { width: '140px' } }}
                     >
-                      <MenuItem value="">
+                      {/* <MenuItem value="">
                         <em>Sélectionnez un four</em>
-                      </MenuItem>
-                      {fours.map((four) => (
+                      </MenuItem> */}
+                      {fours?.map((four) => (
                         <MenuItem key={four.id_four} value={four.id_four}>
                           {four.num_four} - Cadence: {four.cadence}
                         </MenuItem>
@@ -469,10 +491,12 @@ useEffect(() => {
                               variant="outlined"
                               size="small"
                               value={quantites[famille1.id_famille] === 0 ? "0" : quantites[famille1.id_famille]}
-                              InputProps={{ inputProps: { pattern: "[0-9]*", inputMode: "numeric" } }}
-                              onFocus={(e) => {
-                                if (e.target.value === "0") e.target.value = "";
-                              }}
+                              // onFocus={() => {
+                              //     if ((quantites[famille1.id_famille] || 0) === 0) {
+                              //       setQuantites(prev => ({ ...prev, [famille1.id_famille]: "" }));
+                              //       setIsEditing(prev => ({ ...prev, [famille1.id_famille]: true }));
+                              //     }
+                              //   }}
                               onChange={(e) => {
                                 // filtrer pour garder uniquement les chiffres
                                 const val = e.target.value.replace(/[^0-9]/g, "");
@@ -495,9 +519,12 @@ useEffect(() => {
                                     size="small"
                                     value={quantites[famille2.id_famille] === 0 ? "0" : quantites[famille2.id_famille]}
                                     InputProps={{ inputProps: { pattern: "[0-9]*", inputMode: "numeric" } }}
-                                    onFocus={(e) => {
-                                      if (e.target.value === "0") e.target.value = "";
-                                    }}
+                                    /*onFocus={() => {
+                                      if ((quantites[famille1.id_famille] || 0) === 0) {
+                                        setQuantites(prev => ({ ...prev, [famille2.id_famille]: "" }));
+                                        setIsEditing(prev => ({ ...prev, [famille2.id_famille]: true }));
+                                      }
+                                    }}*/
                                     onChange={(e) => {
                                       // filtrer pour garder uniquement les chiffres
                                       const val = e.target.value.replace(/[^0-9]/g, "");
