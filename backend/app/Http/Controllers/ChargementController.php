@@ -103,7 +103,6 @@ public function mesChargements() {
         return $c->details->sum('quantite');
     });
     $chargementCount = $chargements->count();
-
     // Stocker les totaux dans la session
     session([
         'total_pieces' => $totalPieces,
@@ -470,9 +469,19 @@ public function getHistorique(Request $request)
         $search = $request->input('search', '');
         $dateFrom = $request->input('date_from');
         $dateTo = $request->input('date_to');
+        $datetime_sortieFrom = $request->input('datetime_sortie_from');
+        $datetime_sortieTo = $request->input('datetime_sortie_to');
+ // Filtres par colonne
+        $wagon = $request->input('wagon');
+        $four = $request->input('four');
+        $pieces = $request->input('pieces'); // nombre total ou quantité d'une pièce
+        $statut = $request->input('statut');
+        // $datetime_sortieEstime = $request->input('datetime_sortieEstime');
+        $utilisateur = $request->input('utilisateur');
+       $query = Chargement::with(['user', 'wagon', 'four', 'details.famille'])
+    ->withSum('details as total_pieces', 'quantite') // <-- calcule total des pièces
+    ->orderBy('datetime_chargement', 'desc');
 
-        $query = Chargement::with(['user', 'wagon', 'four', 'details.famille'])
-            ->orderBy('datetime_chargement', 'desc');
 
         // Filtre par utilisateur si ce n'est pas un admin
         // Vérifier si l'utilisateur est admin (remplacer selon votre logique d'admin)
@@ -501,8 +510,33 @@ public function getHistorique(Request $request)
             $query->whereDate('datetime_chargement', '<=', $dateTo);
         }
 
+        // Filtres par colonne
+        if ($wagon) {
+            $query->whereHas('wagon', fn($q) => $q->where('num_wagon', 'like', "%{$wagon}%"));
+        }
+        if ($four) {
+            $query->whereHas('four', fn($q) => $q->where('num_four', 'like', "%{$four}%"));
+        }
+       if ($statut) {
+            $query->where('statut', 'like', "%{$statut}%");
+        }
+        // if ($datetime_sortieEstime) {
+        //     $query->whereDate('datetime_sortieEstime ', '>=', $datetime_sortieEstime);
+        // }
+        
+        if ($utilisateur) {
+            $query->whereHas('user', fn($q) =>
+                $q->where('nom', 'like', "%{$utilisateur}%")
+                  ->orWhere('prenom', 'like', "%{$utilisateur}%")
+            );
+        }
+        if ($pieces) {
+             $query->having('total_pieces', '=', $pieces); 
+        }
+       if ($request->input('datetime_sortieEstime')) {
+            $query->whereDate('datetime_sortieEstime', '=', $request->input('datetime_sortieEstime'));
+        }
         $chargements = $query->paginate($perPage);
-
         return response()->json([
             'success' => true,
             'data' => $chargements,

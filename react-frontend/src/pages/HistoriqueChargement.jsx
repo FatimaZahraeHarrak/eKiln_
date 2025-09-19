@@ -46,26 +46,45 @@ const HistoriqueChargement = () => {
   const [dateTo, setDateTo] = useState('');
   const [selectedChargement, setSelectedChargement] = useState(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [filters, setFilters] = useState({
+    date: '',
+    wagon: '',
+    four: '',
+    pieces: '',
+    statut: '',
+    datetime_sortieEstime: '', // 
+    utilisateur: ''
+  });
 
+const handleFilterChange = (field, value) => {
+  setFilters((prev) => ({ ...prev, [field]: value }));
+};
   const fetchHistorique = async () => {
     try {
       setLoading(true);
       setError(null);
       
+      //console.log("fil ;", dateFrom);
       const token = localStorage.getItem('token');
       const params = {
-        page: page + 1,
-        per_page: rowsPerPage,
-        search: searchTerm,
-        ...(dateFrom && { date_from: dateFrom }),
-        ...(dateTo && { date_to: dateTo })
-      };
+            page: page + 1,
+            per_page: rowsPerPage,
+            search: searchTerm,
+            ...(dateFrom && { date_from: dateFrom }),
+            ...(dateTo && { date_to: dateTo }),
+            ...(filters.wagon && { wagon: filters.wagon }),
+            ...(filters.four && { four: filters.four }),
+            ...(filters.pieces && { pieces: filters.pieces }),
+            ...(filters.statut && { statut: filters.statut }),
+             ...(filters.datetime_sortieEstime && { datetime_sortieEstime: filters.datetime_sortieEstime }), // 
+            ...(filters.utilisateur && { utilisateur: filters.utilisateur }),
+        };
 
       const response = await axios.get('http://localhost:8000/api/chargements/historique', {
         headers: { Authorization: `Bearer ${token}` },
         params
       });
-
+      //console.log("data",response.data.data.data);
       setChargements(response.data.data.data);
       setTotal(response.data.total);
     } catch (error) {
@@ -78,7 +97,7 @@ const HistoriqueChargement = () => {
 
   useEffect(() => {
     fetchHistorique();
-  }, [page, rowsPerPage, searchTerm, dateFrom, dateTo]);
+  }, [page, rowsPerPage, searchTerm, dateFrom, dateTo , filters]);
 
   const handleChangePage = (event, newPage) => {
     setPage(newPage);
@@ -124,7 +143,7 @@ const HistoriqueChargement = () => {
       {/* Filtres */}
       <Paper sx={{ p: 2, mb: 3 }}>
         <Grid container spacing={2} alignItems="center">
-          <Grid item xs={12} md={6}>
+          {/* <Grid item xs={12} md={6}>
             <TextField
               fullWidth
               variant="outlined"
@@ -135,7 +154,7 @@ const HistoriqueChargement = () => {
                 startAdornment: <SearchIcon sx={{ mr: 1 }} />
               }}
             />
-          </Grid>
+          </Grid> */}
           <Grid item xs={12} md={6} sx={{ display: 'flex', justifyContent: 'flex-end' }}>
             <Button
               variant="outlined"
@@ -198,34 +217,101 @@ const HistoriqueChargement = () => {
           )}
         </Grid>
       </Paper>
-
       {/* Tableau */}
       <Paper sx={{ overflow: 'hidden' }}>
-        {loading ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
-            <CircularProgress />
-          </Box>
-        ) : error ? (
-          <Box sx={{ p: 2, color: 'error.main' }}>{error}</Box>
-        ) : (
+        
           <>
             <TableContainer>
               <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Date Chargement</TableCell>
-                    <TableCell>Wagon</TableCell>
-                    <TableCell>Four</TableCell>
-                    <TableCell>Pièces</TableCell>
-                    <TableCell>Statut</TableCell>
-                    <TableCell>Utilisateur</TableCell>
-                    <TableCell>Actions</TableCell>
-                  </TableRow>
-                </TableHead>
+               <TableHead>
+                    <TableRow>
+                      <TableCell>
+                    Date Chargement
+                    <TextField
+                      variant="standard"
+                      type="date"
+                      value={dateFrom} // ou un nouvel état filters.date si tu préfères
+                      onChange={(e) => {
+                        setDateFrom(e.target.value); // utilisé pour l'API
+                        setDateTo(e.target.value);   // si tu veux filtrer sur une seule journée
+                      }}
+                      InputLabelProps={{ shrink: true }}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    Date sortie estimée
+                    <TextField
+                      variant="standard"
+                      type="date"
+                      value={filters.datetime_sortieEstime || ''}
+                      onChange={(e) => handleFilterChange('datetime_sortieEstime', e.target.value)}
+                      InputLabelProps={{ shrink: true }}
+                    />
+                  </TableCell>
+                      <TableCell>
+                        Wagon
+                        <TextField
+                          variant="standard"
+                          value={filters.wagon}
+                          onChange={(e) => handleFilterChange('wagon', e.target.value)}
+                          placeholder="Filtrer..."
+                        />
+                      </TableCell>
+                      <TableCell>
+                        Four
+                        <TextField
+                          variant="standard"
+                          value={filters.four}
+                          onChange={(e) => handleFilterChange('four', e.target.value)}
+                          placeholder="Filtrer..."
+                        />
+                      </TableCell>
+                      <TableCell>
+                        Pièces
+                        <TextField
+                          variant="standard"
+                          value={filters.pieces}
+                          onChange={(e) => handleFilterChange('pieces', e.target.value)}
+                          placeholder="Filtrer..."
+                        />
+                      </TableCell>
+                      <TableCell>
+                        Statut
+                        <TextField
+                          variant="standard"
+                          value={filters.statut}
+                          onChange={(e) => handleFilterChange('statut', e.target.value)}
+                          placeholder="Filtrer..."
+                        />
+                      </TableCell>
+                      <TableCell>
+                        Utilisateur
+                        <TextField
+                          variant="standard"
+                          value={filters.utilisateur}
+                          onChange={(e) => handleFilterChange('utilisateur', e.target.value)}
+                          placeholder="Filtrer..."
+                        />
+                      </TableCell>
+                      <TableCell>Actions</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  {loading ? (
+                    <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+                      <CircularProgress />
+                    </Box>
+                  ) : error ? (
+                    <Box sx={{ p: 2, color: 'error.main' }}>{error}</Box>
+                  ) : (
                 <TableBody>
                   {chargements.map((chargement) => (
                     <TableRow key={chargement.id}>
                       <TableCell>{formatDate(chargement.datetime_chargement)}</TableCell>
+                      <TableCell>
+                        {chargement.datetime_sortieEstime
+                          ? formatDate(chargement.datetime_sortieEstime)
+                          : 'N/A'}
+                      </TableCell>
                       <TableCell>{chargement.wagon?.num_wagon || 'N/A'}</TableCell>
                       <TableCell>{chargement.four?.num_four || 'N/A'}</TableCell>
                       <TableCell>
@@ -254,6 +340,7 @@ const HistoriqueChargement = () => {
                     </TableRow>
                   ))}
                 </TableBody>
+        )}
               </Table>
             </TableContainer>
             <TablePagination
@@ -268,7 +355,6 @@ const HistoriqueChargement = () => {
               labelDisplayedRows={({ from, to, count }) => `${from}-${to} sur ${count}`}
             />
           </>
-        )}
       </Paper>
 
       {/* Modal de détails */}
