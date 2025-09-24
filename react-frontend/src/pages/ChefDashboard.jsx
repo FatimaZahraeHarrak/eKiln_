@@ -848,12 +848,12 @@ useEffect(() => {
                               variant="outlined"
                               size="small"
                               value={quantites[famille1.id_famille] === 0 ? "0" : quantites[famille1.id_famille]}
-                              /*onFocus={() => {
+                              onFocus={() => {
                                   if ((quantites[famille1.id_famille] || 0) === 0) {
                                     setQuantites(prev => ({ ...prev, [famille1.id_famille]: "" }));
                                     setIsEditing(prev => ({ ...prev, [famille1.id_famille]: true }));
                                   }
-                                }}*/
+                                }}
                               onChange={(e) => {
                                 // filtrer pour garder uniquement les chiffres
                                 const val = e.target.value.replace(/[^0-9]/g, "");
@@ -863,6 +863,15 @@ useEffect(() => {
                                 if (e.target.value === "") handleQuantiteChange(famille1.id_famille, 0);
                               }}
                               fullWidth
+                              //  si quantité > 0 → colorier le fond
+                             sx={{
+                            backgroundColor:
+                              famille1.nom_famille === "Balaste" || famille1.nom_famille === "Couvercles"
+                                ? "#f8d7da" // rouge clair par défaut
+                                : quantites[famille1.id_famille] > 0
+                                ? "#d1f7c4" // vert si rempli
+                                : "inherit"
+                          }}
                             />
                             </TableCell>
                             {/* Colonne 2 (si existe) */}
@@ -876,12 +885,12 @@ useEffect(() => {
                                     size="small"
                                     value={quantites[famille2.id_famille] === 0 ? "0" : quantites[famille2.id_famille]}
                                     InputProps={{ inputProps: { pattern: "[0-9]*", inputMode: "numeric" } }}
-                                    /*onFocus={() => {
+                                    onFocus={() => {
                                       if ((quantites[famille2.id_famille] || 0) === 0) {
                                         setQuantites(prev => ({ ...prev, [famille2.id_famille]: "" }));
                                         setIsEditing(prev => ({ ...prev, [famille2.id_famille]: true }));
                                       }
-                                    }}*/
+                                    }}
                                     onChange={(e) => {
                                       // filtrer pour garder uniquement les chiffres
                                       const val = e.target.value.replace(/[^0-9]/g, "");
@@ -891,6 +900,14 @@ useEffect(() => {
                                       if (e.target.value === "") handleQuantiteChange(famille2.id_famille, 0);
                                     }}
                                     fullWidth
+                                    sx={{
+                                      backgroundColor:
+                                        famille2.nom_famille === "Balaste" || famille2.nom_famille === "Couvercles"
+                                          ? "#f8d7da" // rouge clair par défaut
+                                          : quantites[famille2.id_famille] > 0
+                                          ? "#d1f7c4" // vert si rempli
+                                          : "inherit"
+                                    }}
                                   />
                                 </TableCell>
                               </>
@@ -1452,7 +1469,8 @@ const WagonTable = ({ fourNum, id_four }) => {
     const [customTrieursNeeded, setCustomTrieursNeeded] = useState(null);
     const [selectedWagonDetails, setSelectedWagonDetails] = useState(null);
     const [showWagonDetailsModal, setShowWagonDetailsModal] = useState(false);
-    const [wagonCount, setWagonCount] = useState(id_four === 1 ? 30 : 16); // Valeur par défaut selon le four
+    const [wagonCount, setWagonCount] = useState(id_four === 6 ? 30 : 16); // Valeur par défaut selon le four
+    const [message, setmessage] = useState('');
   
     const fetchWagonDetails = async (id) => {
         try {
@@ -1487,7 +1505,13 @@ const WagonTable = ({ fourNum, id_four }) => {
             headers: { 'Authorization': `Bearer ${token}` },
             params: params
         });
-        
+        // Si backend renvoie un message (wagon hors shift ou inexistant)
+       if (wagonsResponse.data.message) {
+        setmessage(wagonsResponse.data.message);
+        setTimeout(() => setmessage(''), 5000);
+    }
+        // Sinon, afficher les wagons
+        console.log("data :", wagonsResponse.data);
         setWagonsData(wagonsResponse.data.chargements);
         setCurrentInterval(`${wagonsResponse.data.current_interval.start} - ${wagonsResponse.data.current_interval.end}`);
         setTotalCount(wagonsResponse.data.total_count || wagonsResponse.data.chargements.length);
@@ -1523,13 +1547,12 @@ const WagonTable = ({ fourNum, id_four }) => {
 
     const handleReset = () => {
         setWagonSearch('');
-        setWagonCount(id_four === 1 ? 30 : 16);
+        setWagonCount(id_four === 6 ? 30 : 16);
         fetchData();
     };
 
     useEffect(() => {
         fetchData();
-        
         // Mettre à jour toutes les 3 heures (10800000 ms)
         const interval = setInterval(fetchData, 10800000);
         
@@ -1568,7 +1591,6 @@ const WagonTable = ({ fourNum, id_four }) => {
                             Actualiser
                         </Button>
                     </Box>
-
                     <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
                         <TextField
                             label="Nombre de wagons"
@@ -1580,9 +1602,8 @@ const WagonTable = ({ fourNum, id_four }) => {
                             sx={{ width: 120 }}
                             inputProps={{ min: 1 }}
                         />
-                        
                         <TextField
-                            label="Rechercher à partir du wagon..."
+                            label="Rechercher à partir du wagon"
                             variant="outlined"
                             size="small"
                             value={wagonSearch}
@@ -1608,7 +1629,11 @@ const WagonTable = ({ fourNum, id_four }) => {
                         </Button>
                     </Box>
                 </Box>
-                
+               {message && (
+                  <Alert severity="warning" sx={{ mb: 2 }}>
+                    {message}
+                  </Alert>
+                )}
                 <Table sx={{ minWidth: 650 }} aria-label="wagon table">
                     <TableHead>
                         <TableRow>
@@ -1677,13 +1702,13 @@ const WagonTable = ({ fourNum, id_four }) => {
                     </TableBody>
                 </Table>
 
-                {customTrieursNeeded && (
+                {customTrieursNeeded && wagonsData.length > 0 &&  (
     <Box sx={{ p: 2, mt: 2, backgroundColor: '#f5f5f5', borderRadius: 1 }}>
         <Typography variant="subtitle1" sx={{ mb: 1 }}>
             Besoins en trieurs pour {wagonsData.length} wagons affichés:
         </Typography>
         <FourTrieursNeeded 
-            data={id_four === 1 ? customTrieursNeeded.f3 : customTrieursNeeded.f4} 
+            data={id_four === 6 ? customTrieursNeeded.f3 : customTrieursNeeded.f4} 
             four={fourNum} 
             fullWidth 
         />
@@ -1704,7 +1729,7 @@ const WagonTable = ({ fourNum, id_four }) => {
                     p: 4,
                     borderRadius: 2
                 }}>
-                    {selectedWagonDetails && (
+                    {selectedWagonDetails  &&  (
                         <>
                             <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
                                 <Typography variant="h6">Détails du Wagon #{selectedWagonDetails.wagon_num}</Typography>
@@ -2165,8 +2190,8 @@ const WagonsTabs = () => {
         {activeTab === 'f3'}
       </Box>
 
-      {activeTab === 'f3' && <WagonTable fourNum="F3" id_four={1} />}
-      {activeTab === 'f4' && <WagonTable fourNum="F4" id_four={2} />}
+      {activeTab === 'f3' && <WagonTable fourNum="F3" id_four={6} />}
+      {activeTab === 'f4' && <WagonTable fourNum="F4" id_four={7} />}
     </Box>
   );
 };
@@ -2280,11 +2305,11 @@ const DashboardContent = () => {
       const [f3Response, f4Response] = await Promise.all([
         axios.get('http://localhost:8000/api/chargements/interval', {
           headers: { 'Authorization': `Bearer ${token}` },
-          params: { id_four: 1 }
+          params: { id_four: 6 }
         }),
         axios.get('http://localhost:8000/api/chargements/interval', {
           headers: { 'Authorization': `Bearer ${token}` },
-          params: { id_four: 2 }
+          params: { id_four: 7 }
         })
       ]);
 

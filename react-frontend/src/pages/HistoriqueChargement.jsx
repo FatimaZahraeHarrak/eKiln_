@@ -41,23 +41,27 @@ const HistoriqueChargement = () => {
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [total, setTotal] = useState(0);
   const [searchTerm, setSearchTerm] = useState('');
-  const [showFilters, setShowFilters] = useState(false);
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [selectedChargement, setSelectedChargement] = useState(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [filters, setFilters] = useState({
-    date: '',
+    datetime_chargement: '',
     wagon: '',
+    date: '',
     four: '',
     pieces: '',
     statut: '',
     datetime_sortieEstime: '', // 
-    utilisateur: ''
+    matricule: ''
   });
 
 const handleFilterChange = (field, value) => {
   setFilters((prev) => ({ ...prev, [field]: value }));
+   if ((field === 'datetime_chargement' || field === 'datetime_sortieEstime') && value) {
+    setDateFrom('');
+    setDateTo('');
+  }
 };
   const fetchHistorique = async () => {
     try {
@@ -77,7 +81,8 @@ const handleFilterChange = (field, value) => {
             ...(filters.pieces && { pieces: filters.pieces }),
             ...(filters.statut && { statut: filters.statut }),
              ...(filters.datetime_sortieEstime && { datetime_sortieEstime: filters.datetime_sortieEstime }), // 
-            ...(filters.utilisateur && { utilisateur: filters.utilisateur }),
+               ...(filters.datetime_chargement && { datetime_chargement: filters.datetime_chargement }), // 
+            ...(filters.matricule && { matricule: filters.matricule }),
         };
 
       const response = await axios.get('http://localhost:8000/api/chargements/historique', {
@@ -156,14 +161,14 @@ const handleFilterChange = (field, value) => {
             />
           </Grid> */}
           <Grid item xs={12} md={6} sx={{ display: 'flex', justifyContent: 'flex-end' }}>
-            <Button
+            {/* <Button
               variant="outlined"
               startIcon={<FilterIcon />}
               onClick={() => setShowFilters(!showFilters)}
               sx={{ mr: 2 }}
             >
               Filtres
-            </Button>
+            </Button> */}
             <Button
               variant="outlined"
               startIcon={<RefreshIcon />}
@@ -172,8 +177,6 @@ const handleFilterChange = (field, value) => {
               Actualiser
             </Button>
           </Grid>
-
-          {showFilters && (
             <Grid item xs={12}>
               <Divider sx={{ mb: 2 }} />
               <Grid container spacing={2}>
@@ -184,7 +187,16 @@ const handleFilterChange = (field, value) => {
                     type="date"
                     InputLabelProps={{ shrink: true }}
                     value={dateFrom}
-                    onChange={(e) => setDateFrom(e.target.value)}
+                     onChange={(e) => {
+                      setDateFrom(e.target.value);
+                      if (e.target.value) {
+                        setFilters((prev) => ({
+                          ...prev,
+                          datetime_chargement: '',
+                          datetime_sortieEstime: ''
+                        }));
+                      }
+                    }}
                     InputProps={{
                       startAdornment: <DateRangeIcon sx={{ mr: 1, color: 'action.active' }} />
                     }}
@@ -197,7 +209,16 @@ const handleFilterChange = (field, value) => {
                     type="date"
                     InputLabelProps={{ shrink: true }}
                     value={dateTo}
-                    onChange={(e) => setDateTo(e.target.value)}
+                   onChange={(e) => {
+                      setDateTo(e.target.value);
+                      if (e.target.value) {
+                        setFilters((prev) => ({
+                          ...prev,
+                          datetime_chargement: '',
+                          datetime_sortieEstime: ''
+                        }));
+                      }
+                    }}
                     InputProps={{
                       startAdornment: <DateRangeIcon sx={{ mr: 1, color: 'action.active' }} />
                     }}
@@ -214,12 +235,10 @@ const handleFilterChange = (field, value) => {
                 </Grid>
               </Grid>
             </Grid>
-          )}
         </Grid>
       </Paper>
       {/* Tableau */}
       <Paper sx={{ overflow: 'hidden' }}>
-        
           <>
             <TableContainer>
               <Table>
@@ -230,23 +249,10 @@ const handleFilterChange = (field, value) => {
                     <TextField
                       variant="standard"
                       type="date"
-                      value={dateFrom} // ou un nouvel état filters.date si tu préfères
-                      onChange={(e) => {
-                        setDateFrom(e.target.value); // utilisé pour l'API
-                        setDateTo(e.target.value);   // si tu veux filtrer sur une seule journée
-                      }}
-                      InputLabelProps={{ shrink: true }}
-                    />
-                  </TableCell>
-                  <TableCell>
-                    Date sortie estimée
-                    <TextField
-                      variant="standard"
-                      type="date"
-                      value={filters.datetime_sortieEstime || ''}
-                      onChange={(e) => handleFilterChange('datetime_sortieEstime', e.target.value)}
-                      InputLabelProps={{ shrink: true }}
-                    />
+                      value={filters.datetime_chargement || ''}
+                       onChange={(e) => handleFilterChange('datetime_chargement', e.target.value)}
+                        InputLabelProps={{ shrink: true }}
+                      />
                   </TableCell>
                       <TableCell>
                         Wagon
@@ -285,11 +291,21 @@ const handleFilterChange = (field, value) => {
                         />
                       </TableCell>
                       <TableCell>
-                        Utilisateur
+                    Date sortie estimée
+                    <TextField
+                      variant="standard"
+                      type="date"
+                      value={filters.datetime_sortieEstime || ''}
+                      onChange={(e) => handleFilterChange('datetime_sortieEstime', e.target.value)}
+                      InputLabelProps={{ shrink: true }}
+                    />
+                  </TableCell>
+                      <TableCell>
+                        Matricule
                         <TextField
                           variant="standard"
-                          value={filters.utilisateur}
-                          onChange={(e) => handleFilterChange('utilisateur', e.target.value)}
+                          value={filters.matricule}
+                          onChange={(e) => handleFilterChange('matricule', e.target.value)}
                           placeholder="Filtrer..."
                         />
                       </TableCell>
@@ -307,11 +323,6 @@ const handleFilterChange = (field, value) => {
                   {chargements.map((chargement) => (
                     <TableRow key={chargement.id}>
                       <TableCell>{formatDate(chargement.datetime_chargement)}</TableCell>
-                      <TableCell>
-                        {chargement.datetime_sortieEstime
-                          ? formatDate(chargement.datetime_sortieEstime)
-                          : 'N/A'}
-                      </TableCell>
                       <TableCell>{chargement.wagon?.num_wagon || 'N/A'}</TableCell>
                       <TableCell>{chargement.four?.num_four || 'N/A'}</TableCell>
                       <TableCell>
@@ -324,8 +335,13 @@ const handleFilterChange = (field, value) => {
                           size="small"
                         />
                       </TableCell>
+                       <TableCell>
+                        {chargement.datetime_sortieEstime
+                          ? formatDate(chargement.datetime_sortieEstime)
+                          : 'N/A'}
+                      </TableCell>
                       <TableCell>
-                        {chargement.user?.nom} {chargement.user?.prenom}
+                        {chargement.user?.matricule || "-"}
                       </TableCell>
                       <TableCell>
                         <Tooltip title="Voir détails">
