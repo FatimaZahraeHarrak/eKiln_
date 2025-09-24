@@ -171,7 +171,7 @@ public function getActiveByFour()
     try {
         // Récupérer les chargements actifs pour le four 3
         $f3 = Chargement::with(['wagon', 'four'])
-            ->where('id_four', 1)
+            ->where('id_four', 6)
             ->whereIn('statut', ['en attente', 'en cuisson', 'prêt à sortir'])
             ->orderBy('datetime_sortieEstime', 'asc')
             ->get()
@@ -188,7 +188,7 @@ public function getActiveByFour()
 
         // Récupérer les chargements actifs pour le four 4
         $f4 = Chargement::with(['wagon', 'four'])
-            ->where('id_four', 2)
+            ->where('id_four', 7)
             ->whereIn('statut', ['en attente', 'en cuisson', 'prêt à sortir'])
             ->orderBy('datetime_sortieEstime', 'asc')
             ->get()
@@ -338,7 +338,7 @@ public function getActiveChargementsWithCache()
 
         // Get fresh data
         $f3 = Chargement::with(['wagon', 'four'])
-            ->where('id_four', 1)
+            ->where('id_four', 6)
             ->whereIn('statut', ['en attente', 'en cuisson', 'prêt à sortir'])
             ->orderBy('datetime_sortieEstime', 'asc')
             ->get()
@@ -354,7 +354,7 @@ public function getActiveChargementsWithCache()
             });
 
         $f4 = Chargement::with(['wagon', 'four'])
-            ->where('id_four', 2)
+            ->where('id_four', 7)
             ->whereIn('statut', ['en attente', 'en cuisson', 'prêt à sortir'])
             ->orderBy('datetime_sortieEstime', 'asc')
             ->get()
@@ -469,15 +469,12 @@ public function getHistorique(Request $request)
         $search = $request->input('search', '');
         $dateFrom = $request->input('date_from');
         $dateTo = $request->input('date_to');
-        $datetime_sortieFrom = $request->input('datetime_sortie_from');
-        $datetime_sortieTo = $request->input('datetime_sortie_to');
  // Filtres par colonne
         $wagon = $request->input('wagon');
         $four = $request->input('four');
         $pieces = $request->input('pieces'); // nombre total ou quantité d'une pièce
         $statut = $request->input('statut');
-        // $datetime_sortieEstime = $request->input('datetime_sortieEstime');
-        $utilisateur = $request->input('utilisateur');
+        $matricule = $request->input('matricule');
        $query = Chargement::with(['user', 'wagon', 'four', 'details.famille'])
     ->withSum('details as total_pieces', 'quantite') // <-- calcule total des pièces
     ->orderBy('datetime_chargement', 'desc');
@@ -520,21 +517,21 @@ public function getHistorique(Request $request)
        if ($statut) {
             $query->where('statut', 'like', "%{$statut}%");
         }
-        // if ($datetime_sortieEstime) {
-        //     $query->whereDate('datetime_sortieEstime ', '>=', $datetime_sortieEstime);
-        // }
-        
-        if ($utilisateur) {
+        if ($matricule) {
             $query->whereHas('user', fn($q) =>
-                $q->where('nom', 'like', "%{$utilisateur}%")
-                  ->orWhere('prenom', 'like', "%{$utilisateur}%")
+                $q->where('matricule', 'like', "%{$matricule}%")
+                //   ->orWhere('prenom', 'like', "%{$utilisateur}%")
             );
         }
+        //matricule
         if ($pieces) {
              $query->having('total_pieces', '=', $pieces); 
         }
        if ($request->input('datetime_sortieEstime')) {
             $query->whereDate('datetime_sortieEstime', '=', $request->input('datetime_sortieEstime'));
+        }
+        if ($request->input('datetime_chargement')) {
+            $query->whereDate('datetime_chargement', '=', $request->input('datetime_chargement'));
         }
         $chargements = $query->paginate($perPage);
         return response()->json([
@@ -598,79 +595,6 @@ public function getPopupDetails($id)
         ], 404);
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     public function getProchainsChargements(Request $request)
     {
         try {
@@ -678,8 +602,8 @@ public function getPopupDetails($id)
             $currentHour = $now->hour;
 
             // Définir les intervalles selon la nouvelle logique
-            if ($currentHour >= 5 && $currentHour < 14) {
-                $start = $now->copy()->setTime(5, 0, 0);
+            if ($currentHour >= 6 && $currentHour < 14) {
+                $start = $now->copy()->setTime(6, 0, 0);
                 $end = $now->copy()->setTime(14, 0, 0);
             } elseif ($currentHour >= 14 && $currentHour < 22) {
                 $start = $now->copy()->setTime(14, 0, 0);
@@ -687,10 +611,10 @@ public function getPopupDetails($id)
             } else {
                 if ($currentHour >= 22) {
                     $start = $now->copy()->setTime(22, 0, 0);
-                    $end = $now->copy()->addDay()->setTime(5, 0, 0);
+                    $end = $now->copy()->addDay()->setTime(6, 0, 0);
                 } else {
                     $start = $now->copy()->subDay()->setTime(22, 0, 0);
-                    $end = $now->copy()->setTime(5, 0, 0);
+                    $end = $now->copy()->setTime(6, 0, 0);
                 }
             }
 
@@ -735,7 +659,7 @@ public function getPopupDetails($id)
         return response()->json($chargement);
     }
 
-    public function getChargementsActifs()
+   public function getChargementsActifs()
     {
         $now = now();
         $currentHour = $now->hour;
@@ -743,8 +667,8 @@ public function getPopupDetails($id)
         $limit = request()->input('limit');
 
         // Définir les intervalles selon la nouvelle logique
-        if ($currentHour >= 5 && $currentHour < 14) {
-            $start = $now->copy()->setTime(5, 0, 0);
+        if ($currentHour >= 6 && $currentHour < 14) {
+            $start = $now->copy()->setTime(6, 0, 0);
             $end = $now->copy()->setTime(14, 0, 0);
         } elseif ($currentHour >= 14 && $currentHour < 22) {
             $start = $now->copy()->setTime(14, 0, 0);
@@ -752,13 +676,13 @@ public function getPopupDetails($id)
         } else {
             if ($currentHour >= 22) {
                 $start = $now->copy()->setTime(22, 0, 0);
-                $end = $now->copy()->addDay()->setTime(5, 0, 0);
+                $end = $now->copy()->addDay()->setTime(6, 0, 0);
             } else {
                 $start = $now->copy()->subDay()->setTime(22, 0, 0);
-                $end = $now->copy()->setTime(5, 0, 0);
+                $end = $now->copy()->setTime(6, 0, 0);
             }
         }
-
+        $id_four = request()->input('id_four'); // récupéré avant
         $query = Chargement::with(['wagon', 'four', 'details'])
             ->whereIn('statut', ['en attente', 'en cuisson', 'prêt à sortir','sorti'])
             ->orderBy('datetime_sortieEstime', 'asc');
@@ -769,41 +693,64 @@ public function getPopupDetails($id)
             })
             ->orderBy('datetime_sortieEstime', 'desc')
             ->first();
+        if ($lastWagonChargement) {
+        // Vérifier si le wagon est dans le shift
+        if ($lastWagonChargement->datetime_sortieEstime < $start || $lastWagonChargement->datetime_sortieEstime > $end) {
+            return response()->json([
+                'message' => "⚠️ Le wagon {$startFromWagon} n'est pas prévu de sortir sur ce shift ({$start->format('H:i')} - {$end->format('H:i')}).",
+                'chargements' => [],
+                'current_interval' => [
+                    'start' => $start->format('H:i'),
+                    'end' => $end->format('H:i')
+                ],
+                // 'total_count' => 0
+            ]);
+        }
+        // Wagon dans le shift → afficher à partir de lui
+        $query->where('datetime_sortieEstime', '>=', $lastWagonChargement->datetime_sortieEstime)
+              ->whereBetween('datetime_sortieEstime', [$start, $end]);
 
-            if ($lastWagonChargement) {
-                $query->where('datetime_sortieEstime', '>=', $lastWagonChargement->datetime_sortieEstime);
-            }
+        } else {
+            return response()->json([
+                'message' => "❌ Aucun wagon trouvé avec le numéro {$startFromWagon}.",
+                'chargements' => [],
+                'current_interval' => [
+                    'start' => $start->format('H:i'),
+                    'end' => $end->format('H:i')
+                ],
+                // 'total_count' => 0
+            ]);
+        }
+          //si pas de wagon spécifique)
         } else {
             $query->whereBetween('datetime_sortieEstime', [$start, $end]);
         }
 
-        if (request()->has('id_four')) {
+       if (request()->has('id_four')) {
             $id_four = request()->input('id_four');
             $query->where('id_four', $id_four);
 
-            if ($limit) {
-                $query->limit($limit);
-            } else {
-                if ($id_four == 1) {
+        if ($limit) {
+            $query->limit($limit);
+        } else {
+            if ($id_four == 6) {
                     $query->limit(30);
-                } elseif ($id_four == 2) {
+                } elseif ($id_four == 7) {
                     $query->limit(16);
                 }
-            }
         }
-
-        $chargements = $query->get();
-
-        return response()->json([
-            'chargements' => $chargements,
-            'current_interval' => [
-                'start' => $start->format('H:i'),
-                'end' => $end->format('H:i')
-            ],
-            'total_count' => $chargements->count()
-        ]);
     }
+       $chargements = $query->get();
+        return response()->json([
+    'chargements' => $chargements,
+    'current_interval' => [
+        'start' => $start->format('H:i'),
+        'end' => $end->format('H:i')
+    ],
+    'total_count' => $chargements->count()
+]);
 
+    }
     public function calculateTrieursNeeded()
     {
         $startFromWagon = request()->input('start_from_wagon');
@@ -829,8 +776,8 @@ public function getPopupDetails($id)
             $now = now();
             $currentHour = $now->hour;
 
-            if ($currentHour >= 5 && $currentHour < 14) {
-                $start = $now->copy()->setTime(5, 0, 0);
+            if ($currentHour >= 6 && $currentHour < 14) {
+                $start = $now->copy()->setTime(6, 0, 0);
                 $end = $now->copy()->setTime(14, 0, 0);
             } elseif ($currentHour >= 14 && $currentHour < 22) {
                 $start = $now->copy()->setTime(14, 0, 0);
@@ -838,10 +785,10 @@ public function getPopupDetails($id)
             } else {
                 if ($currentHour >= 22) {
                     $start = $now->copy()->setTime(22, 0, 0);
-                    $end = $now->copy()->addDay()->setTime(5, 0, 0);
+                    $end = $now->copy()->addDay()->setTime(6, 0, 0);
                 } else {
                     $start = $now->copy()->subDay()->setTime(22, 0, 0);
-                    $end = $now->copy()->setTime(5, 0, 0);
+                    $end = $now->copy()->setTime(6, 0, 0);
                 }
             }
 
@@ -857,8 +804,8 @@ public function getPopupDetails($id)
         $fourData = $this->calculateForFour($idFour, $chargements);
 
         return response()->json([
-            'f3' => $idFour == 1 ? $fourData : null,
-            'f4' => $idFour == 2 ? $fourData : null,
+            'f3' => $idFour == 6 ? $fourData : null,
+            'f4' => $idFour == 7 ? $fourData : null,
             'wagons' => $chargements->map(function ($chargement) {
                 return [
                     'id' => $chargement->id,
@@ -872,7 +819,6 @@ public function getPopupDetails($id)
             })
         ]);
     }
-
     private function calculateForFour($idFour, $chargements)
     {
         $famillesData = [];
@@ -918,8 +864,8 @@ public function getPopupDetails($id)
     $now = now();
     $currentHour = $now->hour;
 
-    if ($currentHour >= 5 && $currentHour < 14) {
-        $start = $now->copy()->setTime(5, 0, 0);
+    if ($currentHour >= 6 && $currentHour < 14) {
+        $start = $now->copy()->setTime(6, 0, 0);
         $end = $now->copy()->setTime(14, 0, 0);
         $intervalName = 'Matin';
     } elseif ($currentHour >= 14 && $currentHour < 22) {
@@ -929,10 +875,10 @@ public function getPopupDetails($id)
     } else {
         if ($currentHour >= 22) {
             $start = $now->copy()->setTime(22, 0, 0);
-            $end = $now->copy()->addDay()->setTime(5, 0, 0);
+            $end = $now->copy()->addDay()->setTime(6, 0, 0);
         } else {
             $start = $now->copy()->subDay()->setTime(22, 0, 0);
-            $end = $now->copy()->setTime(5, 0, 0);
+            $end = $now->copy()->setTime(6, 0, 0);
         }
         $intervalName = 'Nuit';
     }
@@ -943,7 +889,7 @@ public function getPopupDetails($id)
             $q->where('nom_famille', 'like', '%couvercle%');
         });
     }])
-    ->where('id_four', 1)
+    ->where('id_four', 6)
     ->whereIn('statut', ['en attente', 'en cuisson', 'prêt à sortir', 'sorti'])
     ->whereBetween('datetime_sortieEstime', [$start, $end])
     ->get();
@@ -959,7 +905,7 @@ public function getPopupDetails($id)
             $q->where('nom_famille', 'like', '%couvercle%');
         });
     }])
-    ->where('id_four', 2)
+    ->where('id_four', 7)
     ->whereIn('statut', ['en attente', 'en cuisson', 'prêt à sortir', 'sorti'])
     ->whereBetween('datetime_sortieEstime', [$start, $end])
     ->get();
@@ -1019,8 +965,8 @@ public function getPopupDetails($id)
         $now = now();
         $currentHour = $now->hour;
 
-        if ($currentHour >= 5 && $currentHour < 14) {
-            $start = $now->copy()->setTime(5, 0, 0);
+        if ($currentHour >= 6 && $currentHour < 14) {
+            $start = $now->copy()->setTime(6, 0, 0);
             $end = $now->copy()->setTime(14, 0, 0);
         } elseif ($currentHour >= 14 && $currentHour < 22) {
             $start = $now->copy()->setTime(14, 0, 0);
@@ -1028,10 +974,10 @@ public function getPopupDetails($id)
         } else {
             if ($currentHour >= 22) {
                 $start = $now->copy()->setTime(22, 0, 0);
-                $end = $now->copy()->addDay()->setTime(5, 0, 0);
+                $end = $now->copy()->addDay()->setTime(6, 0, 0);
             } else {
                 $start = $now->copy()->subDay()->setTime(22, 0, 0);
-                $end = $now->copy()->setTime(5, 0, 0);
+                $end = $now->copy()->setTime(6, 0, 0);
             }
         }
 
@@ -1044,9 +990,9 @@ public function getPopupDetails($id)
             $id_four = request()->input('id_four');
             $query->where('id_four', $id_four);
 
-            if ($id_four == 1) {
+            if ($id_four == 6) {
                 $query->limit(30);
-            } elseif ($id_four == 2) {
+            } elseif ($id_four == 7) {
                 $query->limit(16);
             }
         }
@@ -1067,10 +1013,10 @@ public function getPopupDetails($id)
         $now = now();
         $currentHour = $now->hour;
 
-        if ($currentHour >= 5 && $currentHour < 14) {
-            $start = $now->copy()->setTime(5, 0, 0);
+        if ($currentHour >= 6 && $currentHour < 14) {
+            $start = $now->copy()->setTime(6, 0, 0);
             $end = $now->copy()->setTime(14, 0, 0);
-            $intervalHours = 9;
+            $intervalHours = 8;
         } elseif ($currentHour >= 14 && $currentHour < 22) {
             $start = $now->copy()->setTime(14, 0, 0);
             $end = $now->copy()->setTime(22, 0, 0);
@@ -1078,12 +1024,12 @@ public function getPopupDetails($id)
         } else {
             if ($currentHour >= 22) {
                 $start = $now->copy()->setTime(22, 0, 0);
-                $end = $now->copy()->addDay()->setTime(5, 0, 0);
-                $intervalHours = 7;
+                $end = $now->copy()->addDay()->setTime(6, 0, 0);
+                $intervalHours = 8;
             } else {
                 $start = $now->copy()->subDay()->setTime(22, 0, 0);
-                $end = $now->copy()->setTime(5, 0, 0);
-                $intervalHours = 7;
+                $end = $now->copy()->setTime(6, 0, 0);
+                $intervalHours = 8;
             }
         }
 
@@ -1148,16 +1094,16 @@ public function getPopupDetails($id)
 {
     try {
         $now = Carbon::now();
-        $today5am = $now->copy()->setTime(5, 0, 0);
+        $today5am = $now->copy()->setTime(6, 0, 0);
 
         // Si l'heure actuelle est avant 5h du matin, on considère que le "jour" commence à 5h de la veille
-        if ($now->hour < 5) {
-            $today5am = $now->copy()->subDay()->setTime(5, 0, 0);
+        if ($now->hour < 6) {
+            $today5am = $now->copy()->subDay()->setTime(6, 0, 0);
         }
 
-        $shift1End = $today5am->copy()->addHours(9); // 5h-14h
+        $shift1End = $today5am->copy()->addHours(8); // 5h-14h
         $shift2End = $shift1End->copy()->addHours(8); // 14h-22h
-        $shift3End = $today5am->copy()->addDay()->setTime(5, 0, 0); // 22h-5h du lendemain
+        $shift3End = $today5am->copy()->addDay()->setTime(6, 0, 0); // 22h-5h du lendemain
 
         $results = DB::table('detail_chargements as d')
             ->join('chargements as c', 'd.id_chargement', '=', 'c.id')

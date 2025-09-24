@@ -491,12 +491,12 @@ useEffect(() => {
                               variant="outlined"
                               size="small"
                               value={quantites[famille1.id_famille] === 0 ? "0" : quantites[famille1.id_famille]}
-                              // onFocus={() => {
-                              //     if ((quantites[famille1.id_famille] || 0) === 0) {
-                              //       setQuantites(prev => ({ ...prev, [famille1.id_famille]: "" }));
-                              //       setIsEditing(prev => ({ ...prev, [famille1.id_famille]: true }));
-                              //     }
-                              //   }}
+                              onFocus={() => {
+                                  if ((quantites[famille1.id_famille] || 0) === 0) {
+                                    setQuantites(prev => ({ ...prev, [famille1.id_famille]: "" }));
+                                    setIsEditing(prev => ({ ...prev, [famille1.id_famille]: true }));
+                                  }
+                                }}
                               onChange={(e) => {
                                 // filtrer pour garder uniquement les chiffres
                                 const val = e.target.value.replace(/[^0-9]/g, "");
@@ -506,6 +506,15 @@ useEffect(() => {
                                 if (e.target.value === "") handleQuantiteChange(famille1.id_famille, 0);
                               }}
                               fullWidth
+                              //  si quantité > 0 → colorier le fond
+                             sx={{
+                            backgroundColor:
+                              famille1.nom_famille === "Balaste" || famille1.nom_famille === "Couvercles"
+                                ? "#f8d7da" // rouge clair par défaut
+                                : quantites[famille1.id_famille] > 0
+                                ? "#d1f7c4" // vert si rempli
+                                : "inherit"
+                          }}
                             />
                             </TableCell>
                             {/* Colonne 2 (si existe) */}
@@ -519,12 +528,12 @@ useEffect(() => {
                                     size="small"
                                     value={quantites[famille2.id_famille] === 0 ? "0" : quantites[famille2.id_famille]}
                                     InputProps={{ inputProps: { pattern: "[0-9]*", inputMode: "numeric" } }}
-                                    /*onFocus={() => {
+                                    onFocus={() => {
                                       if ((quantites[famille1.id_famille] || 0) === 0) {
                                         setQuantites(prev => ({ ...prev, [famille2.id_famille]: "" }));
                                         setIsEditing(prev => ({ ...prev, [famille2.id_famille]: true }));
                                       }
-                                    }}*/
+                                    }}
                                     onChange={(e) => {
                                       // filtrer pour garder uniquement les chiffres
                                       const val = e.target.value.replace(/[^0-9]/g, "");
@@ -534,6 +543,14 @@ useEffect(() => {
                                       if (e.target.value === "") handleQuantiteChange(famille2.id_famille, 0);
                                     }}
                                     fullWidth
+                                     sx={{
+                                      backgroundColor:
+                                        famille2.nom_famille === "Balaste" || famille2.nom_famille === "Couvercles"
+                                          ? "#f8d7da" // rouge clair par défaut
+                                          : quantites[famille2.id_famille] > 0
+                                          ? "#d1f7c4" // vert si rempli
+                                          : "inherit"
+                                    }}
                                   />
                                 </TableCell>
                               </>
