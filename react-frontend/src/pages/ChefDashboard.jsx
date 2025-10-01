@@ -420,7 +420,7 @@ const ChargementContent = () => {
   const [chargementCount, setChargementCount] = useState(0); // Nouvel état pour le nombre de chargements
   const wagonRef = useRef(null);
   const messageRef = useRef(null);
-  //const [_isEditing, setIsEditing] = useState({});
+  const [_isEditing, setIsEditing] = useState({});
 
   useEffect(() => {
     const fetchInitialData = async () => {
@@ -1471,7 +1471,16 @@ const WagonTable = ({ fourNum, id_four }) => {
     const [showWagonDetailsModal, setShowWagonDetailsModal] = useState(false);
     const [wagonCount, setWagonCount] = useState(id_four === 6 ? 30 : 16); // Valeur par défaut selon le four
     const [message, setmessage] = useState('');
-  
+    const [filters, setFilters] = useState({ type_wagon: '' });
+    const handleFilterChange = (key, value) => {
+    console.log('Filtre appliqué:', { [key]: value }); // Pour déboguer
+          setFilters((prev) => ({
+              ...prev,
+              [key]: value,
+          }));
+          
+      };
+      
     const fetchWagonDetails = async (id) => {
         try {
             const token = localStorage.getItem('token');
@@ -1500,7 +1509,7 @@ const WagonTable = ({ fourNum, id_four }) => {
             ...(startFromWagon && { start_from_wagon: startFromWagon })
         };
 
-        // Requête pour les wagons
+                // Requête pour les wagons
         const wagonsResponse = await axios.get('http://localhost:8000/api/chargements/interval', {
             headers: { 'Authorization': `Bearer ${token}` },
             params: params
@@ -1516,6 +1525,15 @@ const WagonTable = ({ fourNum, id_four }) => {
         setCurrentInterval(`${wagonsResponse.data.current_interval.start} - ${wagonsResponse.data.current_interval.end}`);
         setTotalCount(wagonsResponse.data.total_count || wagonsResponse.data.chargements.length);
 
+         // Après le filtrage côté client
+        let filteredWagons = wagonsResponse.data.chargements;
+        if (filters.type_wagon) {
+            filteredWagons = filteredWagons.filter(wagon =>
+                (wagon.wagon?.type_wagon || '').toLowerCase() === filters.type_wagon.toLowerCase()
+            );
+            setWagonsData(filteredWagons); 
+        setTotalCount(filteredWagons.length);
+        }
         // Requête pour les trieurs nécessaires avec les MÊMES paramètres
         const trieursResponse = await axios.get('http://localhost:8000/api/chargements/calculate-trieurs', {
             headers: { 'Authorization': `Bearer ${token}` },
@@ -1557,7 +1575,7 @@ const WagonTable = ({ fourNum, id_four }) => {
         const interval = setInterval(fetchData, 10800000);
         
         return () => clearInterval(interval);
-    }, [fourNum]);
+    }, [fourNum , id_four, wagonCount, filters.type_wagon]);
 
     if (loading) return (
         <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
@@ -1570,151 +1588,232 @@ const WagonTable = ({ fourNum, id_four }) => {
             {error}
         </Alert>
     );
+    const handleExportCsv = () => {
+    const headers = [
+      "N° wagon",
+      "Type",
+      "Four",
+      "Pièces",
+      "Heure sortie estimée",
+      "Statut",
+    ];
+      const csvRows = wagonsData.map((wagon) => {
+      const numWagon = wagon.wagon?.num_wagon || 'N/A';
+      const typeWagon = wagon.wagon?.type_wagon || 'N/A';
+      const numFour = wagon.four?.num_four || 'N/A';
+      const pieces = wagon.details?.reduce((sum, detail) => sum + detail.quantite, 0) || 0;
+      const heureSortieEstime = wagon.datetime_sortieEstime
+        ? new Date(wagon.datetime_sortieEstime).toLocaleTimeString('fr-FR')
+        : 'N/A';
+      const statut = wagon.statut;
+
+      return [
+        `"${numWagon}"`,
+        `"${typeWagon}"`,
+        `"${numFour}"`,
+        pieces,
+        `"${heureSortieEstime}"`,
+        `"${statut}"`,
+      ].join(';');
+    });
+
+    const csvContent = [headers.join(';'), ...csvRows].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    // link.setAttribute('download', 'wagons_export.csv');
+    const now = new Date();
+    // Date au format FR → "01/10/2025"
+    const datePart = now.toLocaleDateString('fr-FR').replace(/\//g, '-');
+    // Heure et minutes → "08-09"
+    const timePart = now
+      .toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+      .replace(':', '-');
+    // Nom du fichier final
+    const fileName = `wagons_export_${datePart}_${timePart}.csv`;
+    link.setAttribute('download', fileName);
+
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  // const handleExportPdf = () => {
+  //   window.print();
+  // };
 
     return (
         <>
-            <TableContainer component={Paper} sx={{ mb: 4 }}>
-                <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <Typography variant="subtitle1">
-                            Total: {totalCount} wagons 
-                        </Typography>
-                        <Button 
-                            variant="outlined" 
-                            startIcon={<RefreshIcon />}
-                            onClick={() => {
-                                setWagonSearch('');
-                                fetchData();
-                            }}
-                            size="small"
-                        >
-                            Actualiser
-                        </Button>
-                    </Box>
-                    <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
-                        <TextField
-                            label="Nombre de wagons"
-                            variant="outlined"
-                            size="small"
-                            type="number"
-                            value={wagonCount}
-                            onChange={(e) => setWagonCount(Math.max(1, parseInt(e.target.value) || 1))}
-                            sx={{ width: 120 }}
-                            inputProps={{ min: 1 }}
-                        />
-                        <TextField
-                            label="Rechercher à partir du wagon"
-                            variant="outlined"
-                            size="small"
-                            value={wagonSearch}
-                            onChange={(e) => setWagonSearch(e.target.value)}
-                            sx={{ width: 200 }}
-                            placeholder="Numéro de wagon"
-                        />
-                        
-                        <Button 
-                            variant="contained" 
-                            onClick={handleSearchByWagon}
-                            size="small"
-                        >
-                            Rechercher
-                        </Button>
-                        
-                        <Button 
-                            variant="outlined" 
-                            onClick={handleReset}
-                            size="small"
-                        >
-                            Réinitialiser
-                        </Button>
-                    </Box>
-                </Box>
-               {message && (
-                  <Alert severity="warning" sx={{ mb: 2 }}>
-                    {message}
-                  </Alert>
-                )}
-                <Table sx={{ minWidth: 650 }} aria-label="wagon table">
-                    <TableHead>
-                        <TableRow>
-                            <TableCell>N° wagon</TableCell>
-                            <TableCell>Type</TableCell>
-                            <TableCell>Four</TableCell>
-                            <TableCell>Pièces</TableCell>
-                            <TableCell>Heure sortie estimée</TableCell>
-                            <TableCell>Statut</TableCell>
-                            <TableCell>Actions</TableCell>
-                        </TableRow>
-                    </TableHead>
-                    <TableBody>
-                        {wagonsData.length === 0 ? (
-                            <TableRow>
-                                <TableCell colSpan={7} align="center">Aucun wagon dans cet intervalle</TableCell>
-                            </TableRow>
-                        ) : (
-                            wagonsData.map((wagon) => (
-                                <TableRow
-                                    key={wagon.id}
-                                    sx={{
-                                        ...(selectedWagon === wagon.id && {
-                                            borderLeft: '3px solid #8e44ad',
-                                            borderRight: '3px solid #8e44ad',
-                                            '& td': { borderBottom: '1px solid #8e44ad' }
-                                        }),
-                                        ...(wagon.statut === 'sorti' && { opacity: 0.7 })
-                                    }}
-                                >
-                                    <TableCell>{wagon.wagon?.num_wagon || 'N/A'}</TableCell>
-                                    <TableCell>{wagon.wagon?.type_wagon || 'N/A'}</TableCell>
-                                    <TableCell>{wagon.four?.num_four || 'N/A'}</TableCell>
-                                    <TableCell>
-                                        {wagon.details?.reduce((sum, detail) => sum + detail.quantite, 0) || 0}
-                                    </TableCell>
-                                    <TableCell>
-                                        {wagon.datetime_sortieEstime 
-                                            ? new Date(wagon.datetime_sortieEstime).toLocaleTimeString() 
-                                            : 'N/A'}
-                                    </TableCell>
-                                    <TableCell>
-                                        <Chip
-                                            label={wagon.statut}
-                                            color={
-                                                wagon.statut === 'en cours' ? 'primary' :
-                                                wagon.statut === 'prêt à sortir' ? 'success' : 
-                                                wagon.statut === 'sorti' ? 'default' : 'warning'
-                                            }
-                                            size="small"
-                                        />
-                                    </TableCell>
-                                    <TableCell>
-                                        <Button
-                                            variant="contained"
-                                            size="small"
-                                            onClick={() => fetchWagonDetails(wagon.id)}
-                                            endIcon={<ArrowRightIcon />}
-                                        >
-                                            Détails
-                                        </Button>
-                                    </TableCell>
-                                </TableRow>
-                            ))
-                        )}
-                    </TableBody>
-                </Table>
+              <TableContainer component={Paper} sx={{ mb: 4 }}>
+        <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Typography variant="subtitle1">
+              Total: {totalCount} wagons
+            </Typography>
+            <Stack direction="row" spacing={2}>
+              <Button
+                variant="outlined"
+                startIcon={<RefreshIcon />}
+                onClick={() => {
+                  setWagonSearch('');
+                  setFilters({ type_wagon: '' }); // Reset filters on refresh
+                  fetchData();
+                }}
+                size="small"
+              >
+                Actualiser
+              </Button>
+              <Button variant="contained" onClick={handleExportCsv} size="small">
+                Exporter CSV
+              </Button>
+              {/* <Button variant="contained" onClick={handleExportPdf} size="small">
+                Exporter PDF
+              </Button> */}
+            </Stack>
+          </Box>
+          <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
+            <TextField
+              label="Nombre de wagons"
+              variant="outlined"
+              size="small"
+              type="number"
+              value={wagonCount}
+              onChange={(e) => setWagonCount(Math.max(1, parseInt(e.target.value) || 1))}
+              sx={{ width: 120 }}
+              inputProps={{ min: 1 }}
+            />
+            <TextField
+              label="Rechercher à partir du wagon"
+              variant="outlined"
+              size="small"
+              value={wagonSearch}
+              onChange={(e) => setWagonSearch(e.target.value)}
+              sx={{ width: 200 }}
+              placeholder="Numéro de wagon"
+            />
 
-                {customTrieursNeeded && wagonsData.length > 0 &&  (
-    <Box sx={{ p: 2, mt: 2, backgroundColor: '#f5f5f5', borderRadius: 1 }}>
-        <Typography variant="subtitle1" sx={{ mb: 1 }}>
-            Besoins en trieurs pour {wagonsData.length} wagons affichés:
-        </Typography>
-        <FourTrieursNeeded 
-            data={id_four === 6 ? customTrieursNeeded.f3 : customTrieursNeeded.f4} 
-            four={fourNum} 
-            fullWidth 
-        />
-    </Box>
-)}
-            </TableContainer>
+            <Button
+              variant="contained"
+              onClick={handleSearchByWagon}
+              size="small"
+            >
+              Rechercher
+            </Button>
+
+            <Button
+              variant="outlined"
+              onClick={handleReset}
+              size="small"
+            >
+              Réinitialiser
+            </Button>
+          </Box>
+        </Box>
+        {message && (
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            {message}
+          </Alert>
+        )}
+        <Table sx={{ minWidth: 650 }} aria-label="wagon table">
+          <TableHead>
+            <TableRow>
+              <TableCell>N° wagon</TableCell>
+              <TableCell>
+                Type
+                <FormControl variant="standard" sx={{ ml: 1, minWidth: 100 }}>
+                  <Select
+                    value={filters.type_wagon || ''}
+                    onChange={(e) => handleFilterChange('type_wagon', e.target.value)}
+                    displayEmpty
+                    size="small"
+                  >
+                    <MenuItem value="">Tous</MenuItem>
+                    <MenuItem value="db">DB</MenuItem>
+                    <MenuItem value="gf">GF</MenuItem>
+                    <MenuItem value="bv">BV</MenuItem>
+                    <MenuItem value="bg">BG</MenuItem>
+                    <MenuItem value="dp">DP</MenuItem>
+                  </Select>
+                </FormControl>
+              </TableCell>
+              <TableCell>Four</TableCell>
+              <TableCell>Pièces</TableCell>
+              <TableCell>Heure sortie estimée</TableCell>
+              <TableCell>Statut</TableCell>
+              <TableCell>Actions</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {wagonsData.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={7} align="center">Aucun wagon dans cet intervalle</TableCell>
+              </TableRow>
+            ) : (
+              wagonsData.map((wagon) => (
+                <TableRow
+                  key={wagon.id}
+                  sx={{
+                    ...(selectedWagon === wagon.id && {
+                      borderLeft: '3px solid #8e44ad',
+                      borderRight: '3px solid #8e44ad',
+                      '& td': { borderBottom: '1px solid #8e44ad' }
+                    }),
+                    ...(wagon.statut === 'sorti' && { opacity: 0.7 })
+                  }}
+                >
+                  <TableCell>{wagon.wagon?.num_wagon || 'N/A'}</TableCell>
+                  <TableCell>{wagon.wagon?.type_wagon || 'N/A'}</TableCell>
+                  <TableCell>{wagon.four?.num_four || 'N/A'}</TableCell>
+                  <TableCell>
+                    {wagon.details?.reduce((sum, detail) => sum + detail.quantite, 0) || 0}
+                  </TableCell>
+                  <TableCell>
+                    {wagon.datetime_sortieEstime
+                      ? new Date(wagon.datetime_sortieEstime).toLocaleTimeString()
+                      : 'N/A'}
+                  </TableCell>
+                  <TableCell>
+                    <Chip
+                      label={wagon.statut}
+                      color={
+                        wagon.statut === 'en cours' ? 'primary' :
+                        wagon.statut === 'prêt à sortir' ? 'success' :
+                        wagon.statut === 'sorti' ? 'default' : 'warning'
+                      }
+                      size="small"
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Button
+                      variant="contained"
+                      size="small"
+                      onClick={() => fetchWagonDetails(wagon.id)}
+                      endIcon={<ArrowRightIcon />}
+                    >
+                      Détails
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+
+        {customTrieursNeeded && wagonsData.length > 0 &&  (
+          <Box sx={{ p: 2, mt: 2, backgroundColor: '#f5f5f5', borderRadius: 1 }}>
+            <Typography variant="subtitle1" sx={{ mb: 1 }}>
+              Besoins en trieurs pour {wagonsData.length} wagons affichés:
+            </Typography>
+            <FourTrieursNeeded
+              data={id_four === 6 ? customTrieursNeeded.f3 : customTrieursNeeded.f4}
+              four={fourNum}
+              fullWidth
+            />
+          </Box>
+        )}
+      </TableContainer>
 
             {/* Modal pour les détails du wagon */}
             <Modal open={showWagonDetailsModal} onClose={() => setShowWagonDetailsModal(false)}>

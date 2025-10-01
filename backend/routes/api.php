@@ -149,3 +149,4 @@ Route::middleware('auth:api')->group(function () {
     Route::get('/affectations/productivity', [AffectationController::class, 'productivity']);
 });
 Route::get('/total-pieces-by-shift', [ChargementController::class, 'getTotalPiecesByShift'])->middleware('auth:sanctum');
+Route::put('/chargements/{chargement}', [ChargementController::class, 'update']);

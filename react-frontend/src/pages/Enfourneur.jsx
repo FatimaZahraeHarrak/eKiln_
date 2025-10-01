@@ -55,9 +55,7 @@ function Enfourneur() {
   const [chargementCount, setChargementCount] = useState(0); // Nouvel état pour le nombre de chargements
   const wagonRef = useRef(null);
   const messageRef = useRef(null);
- //const [_isEditing, setIsEditing] = useState({});
-
-
+  const [_isEditing, setIsEditing] = useState({});
   useEffect(() => {
     const fetchInitialData = async () => {
       try {

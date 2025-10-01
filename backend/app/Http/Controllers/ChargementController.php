@@ -8,6 +8,7 @@ use App\Models\DetailChargement;
 use App\Models\Wagon;
 use Illuminate\Support\Facades\Auth;
 use Carbon\Carbon;
+use Carbon\CarbonInterval;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Cache;
@@ -475,11 +476,27 @@ public function getHistorique(Request $request)
         $pieces = $request->input('pieces'); // nombre total ou quantité d'une pièce
         $statut = $request->input('statut');
         $matricule = $request->input('matricule');
-       $query = Chargement::with(['user', 'wagon', 'four', 'details.famille'])
-    ->withSum('details as total_pieces', 'quantite') // <-- calcule total des pièces
-    ->orderBy('datetime_chargement', 'desc');
+        $shift = $request->input('shift'); // 1, 2 ou 3
 
+        $query = Chargement::with(['user', 'wagon', 'four', 'details.famille'])
+            ->withSum('details as total_pieces', 'quantite')
+            ->orderBy('datetime_chargement', 'desc');
 
+        // Filtre shift
+        if ($shift) {
+            $query->whereRaw('(CASE 
+                WHEN TIME(datetime_chargement) BETWEEN "06:00:00" AND "13:59:59" THEN 1
+                WHEN TIME(datetime_chargement) BETWEEN "14:00:00" AND "21:59:59" THEN 2
+                ELSE 3
+            END) = ?', [$shift]);
+        }
+        $query->selectRaw('chargements.*,
+            CASE 
+                WHEN TIME(datetime_chargement) BETWEEN "06:00:00" AND "13:59:59" THEN 1
+                WHEN TIME(datetime_chargement) BETWEEN "14:00:00" AND "21:59:59" THEN 2
+                ELSE 3
+            END as shift
+        ');
         // Filtre par utilisateur si ce n'est pas un admin
         // Vérifier si l'utilisateur est admin (remplacer selon votre logique d'admin)
         //if (!($user->role === 'admin')) { // Remplacez 'role' par le champ réel de votre modèle User
@@ -686,7 +703,6 @@ public function getPopupDetails($id)
         $query = Chargement::with(['wagon', 'four', 'details'])
             ->whereIn('statut', ['en attente', 'en cuisson', 'prêt à sortir','sorti'])
             ->orderBy('datetime_sortieEstime', 'asc');
-
         if ($startFromWagon) {
             $lastWagonChargement = Chargement::whereHas('wagon', function($q) use ($startFromWagon) {
                 $q->where('num_wagon', $startFromWagon);
@@ -721,11 +737,19 @@ public function getPopupDetails($id)
                 // 'total_count' => 0
             ]);
         }
+         // Vérifier le four
+        if ($id_four && $lastWagonChargement->id_four != $id_four) {
+            return response()->json([
+                'message' => "ℹ️ Le wagon {$startFromWagon} existe dans ce shift, mais sur un autre four (Four {$lastWagonChargement->four->num_four}).",
+                'chargements' => [],
+                'current_interval' => ['start' => $start->format('H:i'), 'end' => $end->format('H:i')],
+                // 'total_count' => 0
+            ]);
+        }
           //si pas de wagon spécifique)
         } else {
             $query->whereBetween('datetime_sortieEstime', [$start, $end]);
         }
-
        if (request()->has('id_four')) {
             $id_four = request()->input('id_four');
             $query->where('id_four', $id_four);
@@ -826,8 +850,12 @@ public function getPopupDetails($id)
 
         foreach ($chargements as $chargement) {
             foreach ($chargement->details as $detail) {
-                $idFamille = $detail->id_famille;
+                $famille = $detail->famille;
+                $idFamille = $detail->id_famille; 
                 $quantite = $detail->quantite;
+                 if (in_array(strtolower($famille->nom_famille), ['balaste', 'couvercles'])) {
+                    continue; // saute cette famille
+                }
                 $famille = $detail->famille;
 
                 if (!isset($famillesData[$idFamille])) {
@@ -1136,6 +1164,87 @@ public function getPopupDetails($id)
             'error' => 'Server error',
             'message' => $e->getMessage()
         ], 500);
+    }
+}
+public function update(Request $request, Chargement $chargement)
+{
+//   $changed = false;
+    $validated = $request->validate([
+        'id_wagon' => 'required|exists:wagons,id_wagon',
+        'id_four'  => 'required|exists:fours,id_four',
+        'datetime_chargement' => 'required|date',
+        'statut' => 'required|string',
+        'familles' => 'sometimes|array',
+        'familles.*.id_famille' => 'required|exists:familles,id_famille',
+        'familles.*.quantite' => 'required|integer',
+    ]);
+    // Validation supplémentaire pour la quantité
+    if (isset($validated['familles'])) {
+        foreach ($validated['familles'] as $famille) {
+            if ($famille['quantite'] <= 0) {
+                return response()->json([
+                    'message' => "La quantité pour la famille '{$famille['id_famille']}' doit être supérieure à 0."
+                ], 422);
+            }
+        }
+    }
+    if (isset($validated['familles'])) {
+
+    // Vérifier qu'il y a au moins une famille avec quantité > 0
+    $famillesValides = array_filter($validated['familles'], fn($f) => $f['quantite'] > 0);
+
+    if (empty($famillesValides)) {
+        return response()->json([
+            'message' => "Vous devez ajouter au moins une famille avec une quantité supérieure à 0."
+        ], 422);
+    }
+    // Met à jour les champs simples
+    $chargement->update($validated);
+       
+    // --- Recalculer datetime_sortieEstime en fonction de datetime_chargement et du four --- 
+    $chargement->datetime_sortieEstime = $this->calculateSortieEstime(
+    $chargement->id_four, $chargement->datetime_chargement);
+    $chargement->save(); 
+        
+    // Si familles envoyées, mettre à jour les détails
+    if (isset($validated['familles'])) {
+        $chargement->details()->delete();
+        foreach ($validated['familles'] as $famille) {
+            $chargement->details()->create([
+                'id_famille' => $famille['id_famille'],
+                'quantite' => $famille['quantite'],
+            ]);
+        }
+    }
+//     // Comparer les champs simples
+// if ($chargement->id_wagon != $validated['id_wagon'] ||
+//     $chargement->id_four != $validated['id_four'] ||
+//     $chargement->datetime_chargement != $validated['datetime_chargement'] ||
+//     $chargement->statut != $validated['statut']) {
+//     $changed = true;
+//     return response()->json([
+//     'message' => 'Chargement mis à jour avec succès',
+//     ]);
+// }
+    return response()->json([
+        'message' => 'Chargement mis à jour avec succès',
+        'data' => $chargement->load('details.famille', 'wagon', 'four')
+    ]);
+}
+}
+private function calculateSortieEstime ($idFour,$datetimeChargement)
+{
+   $chargementTime = Carbon::parse($datetimeChargement);
+    // Durées connues pour les fours 3 et 4
+    $durations = [
+        6 => '18:07:40',
+        7 => '33:08:00',
+    ];
+
+    // Si le four est reconnu, calculer la sortie
+    if (isset($durations[$idFour])) {
+        $interval = CarbonInterval::createFromFormat('H:i:s', $durations[$idFour]);
+        return $chargementTime->copy()->add($interval);
     }
 }
 }
