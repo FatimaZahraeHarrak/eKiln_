@@ -454,6 +454,16 @@ useEffect(() => {
                       </Typography>
                     </Paper>
                   </Grid>
+                  <Grid item xs={12} md={4}>
+                    <Paper elevation={3} sx={{ p: 2, textAlign: 'center' }}>
+                      <Typography variant="h6" gutterBottom>
+                     {(totalPieces / chargementCount).toFixed(2)} 
+                      </Typography>
+                      <Typography variant="subtitle2" color="text.secondary">
+                        densite
+                      </Typography>
+                    </Paper>
+                  </Grid>
                 </Grid>
               </Grid>
 
@@ -461,112 +471,166 @@ useEffect(() => {
                 Détails du chargement
               </Typography>
               
-               <TableContainer component={Paper} variant="outlined">
-             
-                <Table aria-label="details table" size="small">
-                  <TableBody>
-                    {(() => {
-                      // 1 Trier les familles alphabétiquement
-                      const famillesTriees = [...familles].sort((a, b) =>
-                        a.nom_famille.localeCompare(b.nom_famille)
-                      );
+              <TableContainer component={Paper} variant="outlined">
+                  <Table aria-label="details table" size="small">
+                    <TableBody>
+                      {(() => {
+                        const listeSpeciale = [ "Cuvette", "Reservoir","colonne" ,"lavabo","Cache siphon"];
 
-                      // 2 Découper en deux colonnes
-                      const mid = Math.ceil(famillesTriees.length / 2);
-                      const col1 = famillesTriees.slice(0, mid);
-                      const col2 = famillesTriees.slice(mid);
+                        // 1 Récupérer les familles spéciales dans l'ordre
+                        const special = listeSpeciale
+                          .map(name =>
+                            familles.find(f => f.nom_famille.toLowerCase() === name.toLowerCase())
+                          )
+                          .filter(Boolean);
 
-                      // 3 Construire les lignes
-                      return col1.map((famille1, rowIndex) => {
-                        const famille2 = col2[rowIndex];
-                        return (
-                          <TableRow key={rowIndex}>
-                            {/* Colonne 1 */}
-                            <TableCell>{famille1.nom_famille}</TableCell>
-                            <TableCell>
-                            <TextField
-                              type="text"
-                              variant="outlined"
-                              size="small"
-                              value={quantites[famille1.id_famille] === 0 ? "0" : quantites[famille1.id_famille]}
-                              onFocus={() => {
-                                  if ((quantites[famille1.id_famille] || 0) === 0) {
-                                    setQuantites(prev => ({ ...prev, [famille1.id_famille]: "" }));
-                                    setIsEditing(prev => ({ ...prev, [famille1.id_famille]: true }));
-                                  }
-                                }}
-                              onChange={(e) => {
-                                // filtrer pour garder uniquement les chiffres
-                                const val = e.target.value.replace(/[^0-9]/g, "");
-                                handleQuantiteChange(famille1.id_famille, val === "" ? 0 : Number(val));
-                              }}
-                              onBlur={(e) => {
-                                if (e.target.value === "") handleQuantiteChange(famille1.id_famille, 0);
-                              }}
-                              fullWidth
-                              //  si quantité > 0 → colorier le fond
-                             sx={{
-                            backgroundColor:
-                              famille1.nom_famille === "Balaste" || famille1.nom_famille === "Couvercles"
-                                ? "#f8d7da" // rouge clair par défaut
-                                : quantites[famille1.id_famille] > 0
-                                ? "#d1f7c4" // vert si rempli
-                                : "inherit"
-                          }}
-                            />
-                            </TableCell>
-                            {/* Colonne 2 (si existe) */}
-                            {famille2 ? (
-                              <>
-                                <TableCell>{famille2.nom_famille}</TableCell>
-                                <TableCell>
+                        // 2 Balaste & Couvercles
+                        const balaste = familles.find(f => f.nom_famille === "Balaste");
+                        const couvercles = familles.find(f => f.nom_famille === "Couvercles");
+
+                        // 3 Le reste
+                        const reste = familles
+                          .filter(
+                            f =>
+                              !listeSpeciale.map(x => x.toLowerCase()).includes(f.nom_famille.toLowerCase()) &&
+                              !["Balaste", "Couvercles"].includes(f.nom_famille)
+                          )
+                          .sort((a, b) => a.nom_famille.localeCompare(b.nom_famille));
+
+                        //  Construire l'ordre final
+                        const ordre = [...special, ...reste];
+
+                        // 4 Découper en colonnes
+                        const mid = Math.ceil(ordre.length / 2);
+                        let col1 = ordre.slice(0, mid);
+                        let col2 = ordre.slice(mid);
+
+                        // 5 Ajouter Balaste à gauche, Couvercles à droite
+                        if (balaste) col1.push(balaste);
+                        if (couvercles) col2.push(couvercles);
+
+                        const maxRows = Math.max(col1.length, col2.length);
+
+                        return Array.from({ length: maxRows }).map((_, rowIndex) => {
+                          const famille1 = col1[rowIndex];
+                          const famille2 = col2[rowIndex];
+
+                          return (
+                            <TableRow key={rowIndex}>
+                              {/* Colonne 1 */}
+                              <TableCell>{famille1?.nom_famille || ""}</TableCell>
+                              <TableCell>
+                                {famille1 && (
                                   <TextField
                                     type="text"
                                     variant="outlined"
                                     size="small"
-                                    value={quantites[famille2.id_famille] === 0 ? "0" : quantites[famille2.id_famille]}
-                                    InputProps={{ inputProps: { pattern: "[0-9]*", inputMode: "numeric" } }}
+                                    value={
+                                      quantites[famille1.id_famille] === 0
+                                        ? "0"
+                                        : quantites[famille1.id_famille]
+                                    }
                                     onFocus={() => {
                                       if ((quantites[famille1.id_famille] || 0) === 0) {
-                                        setQuantites(prev => ({ ...prev, [famille2.id_famille]: "" }));
-                                        setIsEditing(prev => ({ ...prev, [famille2.id_famille]: true }));
+                                        setQuantites(prev => ({
+                                          ...prev,
+                                          [famille1.id_famille]: ""
+                                        }));
+                                        setIsEditing(prev => ({
+                                          ...prev,
+                                          [famille1.id_famille]: true
+                                        }));
                                       }
                                     }}
-                                    onChange={(e) => {
-                                      // filtrer pour garder uniquement les chiffres
+                                    onChange={e => {
                                       const val = e.target.value.replace(/[^0-9]/g, "");
-                                      handleQuantiteChange(famille2.id_famille, val === "" ? 0 : Number(val));
+                                      handleQuantiteChange(
+                                        famille1.id_famille,
+                                        val === "" ? 0 : Number(val)
+                                      );
                                     }}
-                                    onBlur={(e) => {
-                                      if (e.target.value === "") handleQuantiteChange(famille2.id_famille, 0);
+                                    onBlur={e => {
+                                      if (e.target.value === "")
+                                        handleQuantiteChange(famille1.id_famille, 0);
                                     }}
                                     fullWidth
-                                     sx={{
+                                    sx={{
                                       backgroundColor:
-                                        famille2.nom_famille === "Balaste" || famille2.nom_famille === "Couvercles"
-                                          ? "#f8d7da" // rouge clair par défaut
-                                          : quantites[famille2.id_famille] > 0
+                                        famille1.nom_famille === "Balaste" ||
+                                        famille1.nom_famille === "Couvercles"
+                                          ? "#f8d7da" // rouge clair
+                                          : quantites[famille1.id_famille] > 0
                                           ? "#d1f7c4" // vert si rempli
                                           : "inherit"
                                     }}
                                   />
-                                </TableCell>
-                              </>
-                            ) : (
-                              <>
-                                <TableCell></TableCell>
-                                <TableCell></TableCell>
-                              </>
-                            )}
-                          </TableRow>
-                        );
-                      });
-                    })()}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-              
+                                )}
+                              </TableCell>
 
+                              {/* Colonne 2 */}
+                              {famille2 ? (
+                                <>
+                                  <TableCell>{famille2.nom_famille}</TableCell>
+                                  <TableCell>
+                                    <TextField
+                                      type="text"
+                                      variant="outlined"
+                                      size="small"
+                                      value={
+                                        quantites[famille2.id_famille] === 0
+                                          ? "0"
+                                          : quantites[famille2.id_famille]
+                                      }
+                                      onFocus={() => {
+                                        if ((quantites[famille2.id_famille] || 0) === 0) {
+                                          setQuantites(prev => ({
+                                            ...prev,
+                                            [famille2.id_famille]: ""
+                                          }));
+                                          setIsEditing(prev => ({
+                                            ...prev,
+                                            [famille2.id_famille]: true
+                                          }));
+                                        }
+                                      }}
+                                      onChange={e => {
+                                        const val = e.target.value.replace(/[^0-9]/g, "");
+                                        handleQuantiteChange(
+                                          famille2.id_famille,
+                                          val === "" ? 0 : Number(val)
+                                        );
+                                      }}
+                                      onBlur={e => {
+                                        if (e.target.value === "")
+                                          handleQuantiteChange(famille2.id_famille, 0);
+                                      }}
+                                      fullWidth
+                                      sx={{
+                                        backgroundColor:
+                                          famille2.nom_famille === "Balaste" ||
+                                          famille2.nom_famille === "Couvercles"
+                                            ? "#f8d7da"
+                                            : quantites[famille2.id_famille] > 0
+                                            ? "#d1f7c4"
+                                            : "inherit"
+                                      }}
+                                    />
+                                  </TableCell>
+                                </>
+                              ) : (
+                                <>
+                                  <TableCell></TableCell>
+                                  <TableCell></TableCell>
+                                </>
+                              )}
+                            </TableRow>
+                          );
+                        });
+                      })()}
+                    </TableBody>
+                  </Table>
+               </TableContainer>
+               
               <Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end' }}>
                 <Button
                   type="submit"

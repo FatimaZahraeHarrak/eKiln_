@@ -12,6 +12,7 @@ import DescriptionIcon from '@mui/icons-material/Description';
 import LogoutIcon from '@mui/icons-material/Logout';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate, useLocation } from 'react-router-dom';
+import ArchiveIcon from '@mui/icons-material/Archive';
 import Cookies from 'js-cookie';
 
 const appTheme = createTheme({
@@ -81,6 +82,19 @@ const NAVIGATION = [
     icon: <HistoryIcon />,
     path: '/history'
   },
+   {
+    segment: 'historique-chargement',
+    title: 'Historique Chargement',
+    icon: <HistoryIcon />,
+    path: '/historique-chargement'
+  },
+  {
+    segment: 'archives-chargements',
+    title: 'Archives Chargements',
+    icon: <ArchiveIcon />, 
+    path: '/archives-chargements'
+},
+
   {
     segment: 'divider',
     type: 'divider',

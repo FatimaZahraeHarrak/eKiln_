@@ -255,7 +255,7 @@ public function getTotalPiecesByDay()
         // Obtenir la date d'il y a 7 jours
         $oneWeekAgo = Carbon::now()->subDays(7)->startOfDay();
 
-        $results = DetailChargement::join('chargements', 'detail_chargements.id_chargement', '=', 'chargements.id')
+        /*$results = DetailChargement::join('chargements', 'detail_chargements.id_chargement', '=', 'chargements.id')
             ->select(
                 DB::raw('DATEPART(WEEKDAY, chargements.datetime_chargement) as day_index'),
                 DB::raw("FORMAT(chargements.datetime_chargement, 'dddd') as day_name"),
@@ -268,8 +268,8 @@ public function getTotalPiecesByDay()
                 DB::raw("FORMAT(chargements.datetime_chargement, 'dddd')")
             )
             ->orderBy(DB::raw('DATEPART(WEEKDAY, chargements.datetime_chargement)'))
-            ->get();
-        /*$results = DetailChargement::join('chargements', 'detail_chargements.id_chargement', '=', 'chargements.id')
+            ->get();*/
+        $results = DetailChargement::join('chargements', 'detail_chargements.id_chargement', '=', 'chargements.id')
             ->select(
                 DB::raw('DAYOFWEEK(chargements.datetime_chargement) as day_index'),
                 DB::raw('DAYNAME(chargements.datetime_chargement) as day_name'),
@@ -279,7 +279,7 @@ public function getTotalPiecesByDay()
             ->whereNotNull('chargements.datetime_chargement')
             ->groupBy('day_index', 'day_name')
             ->orderBy('day_index')
-            ->get();*/
+            ->get();
 
         // Mapper les jours de la semaine dans l'ordre
         $daysOrder = [
@@ -470,17 +470,19 @@ public function getHistorique(Request $request)
         $search = $request->input('search', '');
         $dateFrom = $request->input('date_from');
         $dateTo = $request->input('date_to');
- // Filtres par colonne
+        // Filtres par colonne
         $wagon = $request->input('wagon');
         $four = $request->input('four');
         $pieces = $request->input('pieces'); // nombre total ou quantité d'une pièce
         $statut = $request->input('statut');
         $matricule = $request->input('matricule');
         $shift = $request->input('shift'); // 1, 2 ou 3
+        // Tri dynamique
+        $sortField = $request->input('sort_field'); // ex: 'total_pieces'
+        $sortOrder = $request->input('sort_order', 'desc'); // 'asc' ou 'desc', par défaut 'desc'
 
         $query = Chargement::with(['user', 'wagon', 'four', 'details.famille'])
-            ->withSum('details as total_pieces', 'quantite')
-            ->orderBy('datetime_chargement', 'desc');
+            ->withSum('details as total_pieces', 'quantite');
 
         // Filtre shift
         if ($shift) {
@@ -497,11 +499,6 @@ public function getHistorique(Request $request)
                 ELSE 3
             END as shift
         ');
-        // Filtre par utilisateur si ce n'est pas un admin
-        // Vérifier si l'utilisateur est admin (remplacer selon votre logique d'admin)
-        //if (!($user->role === 'admin')) { // Remplacez 'role' par le champ réel de votre modèle User
-          //  $query->where('id_user', $user->id_user);
-        //}
 
         // Filtre de recherche
         if ($search) {
@@ -516,7 +513,7 @@ public function getHistorique(Request $request)
             });
         }
 
-        // Filtre par date
+         // Filtre par date
         if ($dateFrom) {
             $query->whereDate('datetime_chargement', '>=', $dateFrom);
         }
@@ -537,19 +534,33 @@ public function getHistorique(Request $request)
         if ($matricule) {
             $query->whereHas('user', fn($q) =>
                 $q->where('matricule', 'like', "%{$matricule}%")
-                //   ->orWhere('prenom', 'like', "%{$utilisateur}%")
             );
         }
-        //matricule
+
+        // Filtre pièces
         if ($pieces) {
-             $query->having('total_pieces', '=', $pieces); 
+            $query->whereHas('details', function($q) use ($pieces) {
+                $q->select(DB::raw('SUM(quantite) as total'))
+                  ->groupBy('id_chargement')
+                  ->havingRaw('SUM(quantite) = ?', [$pieces]);
+            });
         }
-       if ($request->input('datetime_sortieEstime')) {
+
+        // Filtres par date sortie estimée / date chargement exacte
+        if ($request->input('datetime_sortieEstime')) {
             $query->whereDate('datetime_sortieEstime', '=', $request->input('datetime_sortieEstime'));
         }
         if ($request->input('datetime_chargement')) {
             $query->whereDate('datetime_chargement', '=', $request->input('datetime_chargement'));
         }
+
+        // Tri dynamique : si sortField fourni, on trie, sinon ordre par défaut
+        if ($sortField) {
+            $query->orderBy($sortField, $sortOrder);
+        } else {
+            $query->orderBy('datetime_chargement', 'desc');
+        }
+
         $chargements = $query->paginate($perPage);
         return response()->json([
             'success' => true,
@@ -1168,7 +1179,6 @@ public function getPopupDetails($id)
 }
 public function update(Request $request, Chargement $chargement)
 {
-//   $changed = false;
     $validated = $request->validate([
         'id_wagon' => 'required|exists:wagons,id_wagon',
         'id_four'  => 'required|exists:fours,id_four',
@@ -1186,6 +1196,16 @@ public function update(Request $request, Chargement $chargement)
                     'message' => "La quantité pour la famille '{$famille['id_famille']}' doit être supérieure à 0."
                 ], 422);
             }
+        }
+    }
+   // Vérifier doublons dans id_famille
+    if (isset($validated['familles'])) {
+        $ids = array_column($validated['familles'], 'id_famille');
+
+        if (count($ids) !== count(array_unique($ids))) {
+            return response()->json([
+                'message' => "Vous avez ajouté la même famille plusieurs fois."
+            ], 422);
         }
     }
     if (isset($validated['familles'])) {
@@ -1216,21 +1236,12 @@ public function update(Request $request, Chargement $chargement)
             ]);
         }
     }
-//     // Comparer les champs simples
-// if ($chargement->id_wagon != $validated['id_wagon'] ||
-//     $chargement->id_four != $validated['id_four'] ||
-//     $chargement->datetime_chargement != $validated['datetime_chargement'] ||
-//     $chargement->statut != $validated['statut']) {
-//     $changed = true;
-//     return response()->json([
-//     'message' => 'Chargement mis à jour avec succès',
-//     ]);
-// }
+    
     return response()->json([
         'message' => 'Chargement mis à jour avec succès',
         'data' => $chargement->load('details.famille', 'wagon', 'four')
     ]);
-}
+    }     
 }
 private function calculateSortieEstime ($idFour,$datetimeChargement)
 {
@@ -1247,4 +1258,42 @@ private function calculateSortieEstime ($idFour,$datetimeChargement)
         return $chargementTime->copy()->add($interval);
     }
 }
+public function destroy(Chargement $chargement)
+{
+    try {
+        $user = auth()->user();
+        if (!$user) {
+        return response()->json(['message' => 'Non authentifié'], 401);
+    }
+        // Enregistrer une copie dans la table archives
+        DB::table('archives_chargements')->insert([
+            'id_chargement' => $chargement->id,
+            'id_user' => $chargement->id_user,
+            'id_wagon' => $chargement->id_wagon,
+            'id_four' => $chargement->id_four,
+            'datetime_chargement' => $chargement->datetime_chargement,
+            'datetime_sortieEstime' => $chargement->datetime_sortieEstime,
+            'statut' => $chargement->statut,
+            'matricule_suppression' => $user->matricule ,
+            'date_suppression' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        // Supprimer les détails liés
+        $chargement->details()->delete();
+
+        // Supprimer le chargement
+        $chargement->delete();
+
+        return response()->json([
+            'message' => "Chargement archivé et supprimé avec succès ✅"
+        ]);
+    } catch (\Exception $e) {
+        return response()->json([
+            'message' => "Erreur : impossible de supprimer le chargement",
+            'error' => $e->getMessage()
+        ], 500);
+    }
+}
+
 }

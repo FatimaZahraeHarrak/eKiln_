@@ -24,7 +24,10 @@ import {
   Autocomplete,
   Select,
   Alert,
-  MenuItem
+  MenuItem, Dialog,          
+  DialogTitle,      
+  DialogContent,   
+  DialogActions,    
 } from '@mui/material';
 import { 
   Search as SearchIcon, 
@@ -33,7 +36,9 @@ import {
   Visibility as VisibilityIcon,
   Close as CloseIcon,
   DateRange as DateRangeIcon,
-  Edit as EditIcon   
+  Edit as EditIcon ,
+  Delete as DeleteIcon ,
+  Warning as WarningIcon 
 } from '@mui/icons-material';
 import { format, parseISO } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -56,7 +61,11 @@ const HistoriqueChargement = () => {
   const [familles, setFamilles] = useState([]);
   const [fours, setFours] = useState([]);
   const [wagons, setWagons] = useState([]);
+  const [confirmDeleteIndex, setConfirmDeleteIndex] = useState(null);
+  const [chargementToDelete, setChargementToDelete] = useState(null);
   const [loadingSubmit, setLoadingSubmit] = useState(false); // pour l'édition
+  // null = tri par défaut, 'desc' = décroissant, 'asc' = croissant
+  const [piecesSortOrder, setPiecesSortOrder] = useState(null);
   const [filters, setFilters] = useState({
     datetime_chargement: '',
     wagon: '',
@@ -93,6 +102,26 @@ const HistoriqueChargement = () => {
   setEditError('');
   setEditSuccess(false);
 };
+// const handleDelete = async (id) => {
+//   if (!window.confirm("Voulez-vous vraiment supprimer ce chargement ?")) return;
+
+//   try {
+//     const token = localStorage.getItem("token");
+//     const response =await axios.delete(`http://localhost:8000/api/chargements/${id}`, {
+//       headers: { Authorization: `Bearer ${token}` },
+//     });
+
+//     // Supprime le chargement du tableau local
+//     setChargements(prev => prev.filter(c => c.id !== id));
+//     // Afficher le message renvoyé par Laravel
+//     const message = response.data?.message || "Chargement supprimé avec succès ✅";
+//     alert(message);
+//   } catch (err) {
+//     console.error(err);
+//    const message = err.response?.data?.message || "Erreur lors de la suppression du chargement.";
+//     alert(message);
+//   }
+// };
 // // Gérer la saisie
 // const handleEditChange = (e) => {
 //   setEditFormData({ ...editFormData, [e.target.name]: e.target.value });
@@ -190,43 +219,44 @@ const handleFilterChange = (field, value) => {
     setDateTo('');
   }
 };
-  const fetchHistorique = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      
-      //console.log("fil ;", dateFrom);
-      const token = localStorage.getItem('token');
-      const params = {
-            page: page + 1,
-            per_page: rowsPerPage,
-            search: searchTerm,
-            ...(dateFrom && { date_from: dateFrom }),
-            ...(dateTo && { date_to: dateTo }),
-            ...(filters.wagon && { wagon: filters.wagon }),
-            ...(filters.four && { four: filters.four }),
-            ...(filters.pieces && { pieces: filters.pieces }),
-            ...(filters.statut && { statut: filters.statut }),
-            ...(filters.datetime_sortieEstime && { datetime_sortieEstime: filters.datetime_sortieEstime }), // 
-            ...(filters.datetime_chargement && { datetime_chargement: filters.datetime_chargement }), // 
-            ...(filters.matricule && { matricule: filters.matricule }),
-            ...(filters.shift && { shift: filters.shift }),
-        };
+ const fetchHistorique = async (sortOptions = {}) => {
+  try {
+    setLoading(true);
+    setError(null);
 
-      const response = await axios.get('http://localhost:8000/api/chargements/historique', {
-        headers: { Authorization: `Bearer ${token}` },
-        params
-      });
-      //console.log("data",response.data.data.data);
-      setChargements(response.data.data.data);
-      setTotal(response.data.total);
-    } catch (error) {
-      console.error('Erreur:', error);
-      setError("Erreur lors du chargement de l'historique");
-    } finally {
-      setLoading(false);
-    }
-  };
+    const token = localStorage.getItem('token');
+    const params = {
+      page: page + 1,
+      per_page: rowsPerPage,
+      search: searchTerm,
+      ...(dateFrom && { date_from: dateFrom }),
+      ...(dateTo && { date_to: dateTo }),
+      ...(filters.wagon && { wagon: filters.wagon }),
+      ...(filters.four && { four: filters.four }),
+      ...(filters.pieces && { pieces: filters.pieces }), 
+      ...(filters.statut && { statut: filters.statut }),
+      ...(filters.datetime_sortieEstime && { datetime_sortieEstime: filters.datetime_sortieEstime }),
+      ...(filters.datetime_chargement && { datetime_chargement: filters.datetime_chargement }),
+      ...(filters.matricule && { matricule: filters.matricule }),
+      ...(filters.shift && { shift: filters.shift }),
+      ...sortOptions, // tri dynamique ici
+    };
+
+    const response = await axios.get('http://localhost:8000/api/chargements/historique', {
+      headers: { Authorization: `Bearer ${token}` },
+      params
+    });
+
+    setChargements(response.data.data.data);
+    setTotal(response.data.total);
+  } catch (error) {
+    console.error('Erreur:', error);
+    setError("Erreur lors du chargement de l'historique");
+  } finally {
+    setLoading(false);
+  }
+};
+
 
   useEffect(() => {
     fetchHistorique();
@@ -388,14 +418,24 @@ const handleFilterChange = (field, value) => {
                         InputLabelProps={{ shrink: true }}
                       />
                   </TableCell>
-                   <TableCell>Shift
-                    <TextField
-                      variant="standard"
+                  <TableCell>
+                    Shift
+                    <Autocomplete
+                      freeSolo
+                      options={[1, 2, 3]} // options proposées
                       value={filters.shift}
-                      onChange={(e) => handleFilterChange('shift', e.target.value)}
-                      placeholder="Filtrer..."
+                      onChange={(event, newValue) => handleFilterChange('shift', newValue)}
+                      onInputChange={(event, newInputValue) => handleFilterChange('shift', newInputValue)}
+                      sx={{ width: 60 }} // largeur maximale du champ
+                      renderInput={(params) => (
+                        <TextField
+                          {...params}
+                          variant="standard"
+                          placeholder="Filtrer..."
+                        />
+                      )}
                     />
-                   </TableCell>
+                  </TableCell>
                       <TableCell>
                         Wagon
                         <TextField
@@ -416,12 +456,39 @@ const handleFilterChange = (field, value) => {
                       </TableCell>
                       <TableCell>
                         Pièces
-                        <TextField
-                          variant="standard"
-                          value={filters.pieces}
-                          onChange={(e) => handleFilterChange('pieces', e.target.value)}
-                          placeholder="Filtrer..."
-                        />
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          {/* TextField pour filtrer */}
+                          <TextField
+                            variant="standard"
+                            value={filters.pieces}
+                            onChange={(e) => handleFilterChange('pieces', e.target.value)}
+                            placeholder="Filtrer..."
+                            sx={{ width: 60 }}
+                          />
+
+                          {/* Bouton tri cyclique */}
+                          <Button
+                            variant="text"
+                            size="small"
+                            onClick={() => {
+                              let nextOrder;
+                              if (piecesSortOrder === null) nextOrder = 'desc';
+                              else if (piecesSortOrder === 'desc') nextOrder = 'asc';
+                              else nextOrder = null; // retour au tri par défaut
+
+                              setPiecesSortOrder(nextOrder);
+
+                              if (nextOrder) {
+                                fetchHistorique({ sort_field: 'total_pieces', sort_order: nextOrder });
+                              } else {
+                                fetchHistorique(); // tri par défaut
+                              }
+                            }}
+                            sx={{ minWidth: '30px', padding: 0 }}
+                          >
+                            {piecesSortOrder === null ? '⇅' : piecesSortOrder === 'desc' ? '▼' : '▲'}
+                          </Button>
+                        </Box>
                       </TableCell>
                       <TableCell>
                         Statut
@@ -451,7 +518,7 @@ const handleFilterChange = (field, value) => {
                           placeholder="Filtrer..."
                         />
                       </TableCell>
-                      <TableCell>Actions</TableCell>
+                      <TableCell sx={{ width: '160px' }}>Actions</TableCell>
                     </TableRow>
                   </TableHead>
                   {loading ? (
@@ -498,6 +565,14 @@ const handleFilterChange = (field, value) => {
                         <EditIcon />
                       </IconButton>
                       </Tooltip>
+                      <Tooltip title="Supprimer">
+                        <IconButton
+                            color="error"
+                            onClick={() =>setChargementToDelete(chargement)}
+                          >
+                            <DeleteIcon />
+                        </IconButton>
+                      </Tooltip>
                     </TableCell>
                     </TableRow>
                   ))}
@@ -518,6 +593,54 @@ const handleFilterChange = (field, value) => {
             />
           </>
       </Paper>
+      {/* Dialog confirmation suppression chargement */}
+                  <Dialog
+                    open={chargementToDelete !== null}
+                    onClose={() => setChargementToDelete(null)}
+                  >
+                    <DialogTitle>Confirmer la suppression</DialogTitle>
+                    <DialogContent>
+                      <Box display="flex" alignItems="center" gap={2}>
+                        <WarningIcon color="warning" sx={{ fontSize: 50 }} />
+                          <Typography>
+                            Êtes-vous sûr de vouloir supprimer le chargement #
+                            {chargementToDelete?.id} ?
+                          </Typography>
+                      </Box>
+                    </DialogContent>
+                    <DialogActions>
+                      <Button onClick={() => setChargementToDelete(null)} color="primary">
+                        Annuler
+                      </Button>
+                      <Button
+                        onClick={async () => {
+                          try {
+                            const token = localStorage.getItem("token");
+                            const response = await axios.delete(
+                              `http://localhost:8000/api/chargements/${chargementToDelete.id}`,
+                              { headers: { Authorization: `Bearer ${token}` } }
+                            );
+
+                            // Supprime du tableau local
+                            setChargements(prev => prev.filter(c => c.id !== chargementToDelete.id));
+
+                            // Affiche le message du backend
+                            alert(response.data?.message || "Chargement supprimé avec succès ✅");
+
+                          } catch (err) {
+                            console.error(err);
+                            alert(err.response?.data?.message || "Erreur lors de la suppression du chargement.");
+                          } finally {
+                            setChargementToDelete(null);
+                          }
+                        }}
+                        color="error"
+                        variant="contained"
+                      >
+                        Supprimer
+                      </Button>
+                    </DialogActions>
+                  </Dialog>
             {/* Modal d'édition */}
                 <Modal open={showEditModal} onClose={() => setShowEditModal(false)}>
               <Box sx={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", width: 600, bgcolor: "background.paper", boxShadow: 24, p: 4, borderRadius: 2 }}>
@@ -619,16 +742,44 @@ const handleFilterChange = (field, value) => {
 
                       {/* Supprimer */}
                       <Grid item>
-                        <IconButton onClick={() => {
-                          const newFamilles = editFormData.familles.filter((_, i) => i !== index);
-                          setEditFormData({ ...editFormData, familles: newFamilles });
-                        }}>
+                        <IconButton color="error" onClick={() => setConfirmDeleteIndex(index)}>
                           <CloseIcon />
                         </IconButton>
                       </Grid>
                     </Grid>
                   ))}
                   </Box>
+                  {/* Dialog confirmation suppression */}
+                  <Dialog
+                    open={confirmDeleteIndex !== null}
+                    onClose={() => setConfirmDeleteIndex(null)}
+                  >
+                    <DialogTitle>Confirmer la suppression</DialogTitle>
+                    <DialogContent>
+                      <Typography>
+                        Êtes-vous sûr de vouloir supprimer la famille "
+                        {confirmDeleteIndex !== null && editFormData.familles[confirmDeleteIndex].nom_famille}" ?
+                      </Typography>
+                    </DialogContent>
+                    <DialogActions>
+                      <Button onClick={() => setConfirmDeleteIndex(null)} color="primary">
+                        Annuler
+                      </Button>
+                      <Button
+                        onClick={() => {
+                          const newFamilles = editFormData.familles.filter(
+                            (_, i) => i !== confirmDeleteIndex
+                          );
+                          setEditFormData({ ...editFormData, familles: newFamilles });
+                          setConfirmDeleteIndex(null);
+                        }}
+                        color="error"
+                        variant="contained"
+                      >
+                        Supprimer
+                      </Button>
+                    </DialogActions>
+                  </Dialog>
                  <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>
                 <Button
                   type="button"
@@ -643,7 +794,7 @@ const handleFilterChange = (field, value) => {
                 </Button>
 
                 <Button type="submit" variant="contained" disabled={loadingSubmit}>
-                  {loadingSubmit ? <CircularProgress size={24} /> : 'Mettre à jour'}
+                  {loadingSubmit ? <CircularProgress size={24} /> : 'Enregistrer'}
                 </Button>
                 
                 {/* Bouton Annuler */}
