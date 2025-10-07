@@ -20,7 +20,14 @@ import {
   Chip,
   Divider,
   Modal,
-  CircularProgress
+  CircularProgress,
+  Autocomplete,
+  Select,
+  Alert,
+  MenuItem, Dialog,          
+  DialogTitle,      
+  DialogContent,   
+  DialogActions,    
 } from '@mui/material';
 import { 
   Search as SearchIcon, 
@@ -28,7 +35,10 @@ import {
   Refresh as RefreshIcon,
   Visibility as VisibilityIcon,
   Close as CloseIcon,
-  DateRange as DateRangeIcon
+  DateRange as DateRangeIcon,
+  Edit as EditIcon ,
+  Delete as DeleteIcon ,
+  Warning as WarningIcon 
 } from '@mui/icons-material';
 import { format, parseISO } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -45,6 +55,17 @@ const HistoriqueChargement = () => {
   const [dateTo, setDateTo] = useState('');
   const [selectedChargement, setSelectedChargement] = useState(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editError, setEditError] = useState('');
+  const [editSuccess, setEditSuccess] = useState(false);
+  const [familles, setFamilles] = useState([]);
+  const [fours, setFours] = useState([]);
+  const [wagons, setWagons] = useState([]);
+  const [confirmDeleteIndex, setConfirmDeleteIndex] = useState(null);
+  const [chargementToDelete, setChargementToDelete] = useState(null);
+  const [loadingSubmit, setLoadingSubmit] = useState(false); // pour l'édition
+  // null = tri par défaut, 'desc' = décroissant, 'asc' = croissant
+  const [piecesSortOrder, setPiecesSortOrder] = useState(null);
   const [filters, setFilters] = useState({
     datetime_chargement: '',
     wagon: '',
@@ -53,8 +74,143 @@ const HistoriqueChargement = () => {
     pieces: '',
     statut: '',
     datetime_sortieEstime: '', // 
-    matricule: ''
+    matricule: '',
+    shift: ''
   });
+  const [editFormData, setEditFormData] = useState({
+    wagon_id: "",
+    four_id: "",
+    datetime_chargement: "",
+    statut: "",
+    familles: [] // [{ id_famille, quantite }]
+  });
+  // Ouvrir le formulaire avec les données existantes
+  const handleEdit = (chargement) => {
+    setEditFormData({
+      wagon_id: chargement.wagon?.id_wagon || "",
+      four_id: chargement.four?.id_four || "",
+      datetime_chargement: chargement.datetime_chargement?.slice(0, 10) || "",
+      statut: chargement.statut || "",
+      familles: chargement.details.map(d => ({
+        id_famille: d.famille?.id_famille,
+        nom_famille: d.famille?.nom_famille,
+        quantite: d.quantite
+      }))
+    });
+  setSelectedChargement(chargement);
+  setShowEditModal(true);
+  setEditError('');
+  setEditSuccess(false);
+};
+// const handleDelete = async (id) => {
+//   if (!window.confirm("Voulez-vous vraiment supprimer ce chargement ?")) return;
+
+//   try {
+//     const token = localStorage.getItem("token");
+//     const response =await axios.delete(`http://localhost:8000/api/chargements/${id}`, {
+//       headers: { Authorization: `Bearer ${token}` },
+//     });
+
+//     // Supprime le chargement du tableau local
+//     setChargements(prev => prev.filter(c => c.id !== id));
+//     // Afficher le message renvoyé par Laravel
+//     const message = response.data?.message || "Chargement supprimé avec succès ✅";
+//     alert(message);
+//   } catch (err) {
+//     console.error(err);
+//    const message = err.response?.data?.message || "Erreur lors de la suppression du chargement.";
+//     alert(message);
+//   }
+// };
+// // Gérer la saisie
+// const handleEditChange = (e) => {
+//   setEditFormData({ ...editFormData, [e.target.name]: e.target.value });
+// };
+const fetchInitialData = async () => {
+  try {
+    const token = localStorage.getItem("token");
+    const [famillesRes, foursRes, wagonsRes] = await Promise.all([
+      axios.get("http://localhost:8000/api/familles", { headers: { Authorization: `Bearer ${token}` } }),
+      axios.get("http://localhost:8000/api/fours", { headers: { Authorization: `Bearer ${token}` } }),
+      axios.get("http://localhost:8000/api/wagons1", { headers: { Authorization: `Bearer ${token}` } }),
+    ]);
+    setFamilles(famillesRes.data);
+    setFours(foursRes.data);
+    setWagons(wagonsRes.data.data);
+  } catch (err) {
+    console.error("Erreur fetchInitialData :", err);
+  }
+};
+useEffect(() => {
+  fetchInitialData();
+}, []);
+
+const handleEditSubmit = async (e) => {
+  e.preventDefault();
+  setLoading(prev => ({ ...prev, submit: true }));
+  setEditError('');
+  setEditSuccess(false);
+  setLoadingSubmit(true);
+
+  try {
+    const token = localStorage.getItem("token");
+    const payload = {
+      id_wagon: editFormData.wagon_id,
+      id_four: editFormData.four_id,
+      datetime_chargement: editFormData.datetime_chargement,
+      statut: editFormData.statut,
+     familles: editFormData.familles.map(f => ({
+        id_famille: f.id_famille,
+        quantite: f.quantite
+      }))
+    };
+    const response = await axios.put(
+      `http://localhost:8000/api/chargements/${selectedChargement.id}`,
+      payload,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+
+    // Mettre à jour le chargement sélectionné (modal détails)
+  setSelectedChargement(response.data.data);
+   console.log("reponse:",response.data.data);
+   console.log("Total pièces :", response.data.data.details.reduce((sum, d) => sum + d.quantite, 0));
+  const successMsg = response.data.message || "Chargement mis à jour avec succès ✅";
+  setEditSuccess(successMsg);
+  setEditError(""); // reset erreur
+  console.log("message :", successMsg);
+
+    // Mettre à jour le tableau principal
+    setChargements(prev =>
+      prev.map(c =>
+        c.id === selectedChargement.id ? response.data.data : c
+      )
+    );
+    setShowEditModal(false);
+    fetchHistorique();
+  } catch (err) {
+    console.error(err);
+    // récupère le message renvoyé par Laravel
+    const message = err.response?.data?.message || "Impossible de mettre à jour ce chargement.";
+    console.log("message :", message);
+    setEditError(message);
+  } finally {
+    setLoading(prev => ({ ...prev, submit: false }));
+    setLoadingSubmit(false);
+  }
+};
+useEffect(() => {
+  if (editError) {
+    const timer = setTimeout(() => setEditError(''), 5000); // 3 secondes
+    return () => clearTimeout(timer);
+  }
+}, [editError]);
+
+useEffect(() => {
+  if (editSuccess) {
+    const timer = setTimeout(() => setEditSuccess(false), 5000); // 3 secondes
+    return () => clearTimeout(timer);
+  }
+}, [editSuccess]);
 
 const handleFilterChange = (field, value) => {
   setFilters((prev) => ({ ...prev, [field]: value }));
@@ -63,42 +219,44 @@ const handleFilterChange = (field, value) => {
     setDateTo('');
   }
 };
-  const fetchHistorique = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      
-      //console.log("fil ;", dateFrom);
-      const token = localStorage.getItem('token');
-      const params = {
-            page: page + 1,
-            per_page: rowsPerPage,
-            search: searchTerm,
-            ...(dateFrom && { date_from: dateFrom }),
-            ...(dateTo && { date_to: dateTo }),
-            ...(filters.wagon && { wagon: filters.wagon }),
-            ...(filters.four && { four: filters.four }),
-            ...(filters.pieces && { pieces: filters.pieces }),
-            ...(filters.statut && { statut: filters.statut }),
-             ...(filters.datetime_sortieEstime && { datetime_sortieEstime: filters.datetime_sortieEstime }), // 
-               ...(filters.datetime_chargement && { datetime_chargement: filters.datetime_chargement }), // 
-            ...(filters.matricule && { matricule: filters.matricule }),
-        };
+ const fetchHistorique = async (sortOptions = {}) => {
+  try {
+    setLoading(true);
+    setError(null);
 
-      const response = await axios.get('http://localhost:8000/api/chargements/historique', {
-        headers: { Authorization: `Bearer ${token}` },
-        params
-      });
-      //console.log("data",response.data.data.data);
-      setChargements(response.data.data.data);
-      setTotal(response.data.total);
-    } catch (error) {
-      console.error('Erreur:', error);
-      setError("Erreur lors du chargement de l'historique");
-    } finally {
-      setLoading(false);
-    }
-  };
+    const token = localStorage.getItem('token');
+    const params = {
+      page: page + 1,
+      per_page: rowsPerPage,
+      search: searchTerm,
+      ...(dateFrom && { date_from: dateFrom }),
+      ...(dateTo && { date_to: dateTo }),
+      ...(filters.wagon && { wagon: filters.wagon }),
+      ...(filters.four && { four: filters.four }),
+      ...(filters.pieces && { pieces: filters.pieces }), 
+      ...(filters.statut && { statut: filters.statut }),
+      ...(filters.datetime_sortieEstime && { datetime_sortieEstime: filters.datetime_sortieEstime }),
+      ...(filters.datetime_chargement && { datetime_chargement: filters.datetime_chargement }),
+      ...(filters.matricule && { matricule: filters.matricule }),
+      ...(filters.shift && { shift: filters.shift }),
+      ...sortOptions, // tri dynamique ici
+    };
+
+    const response = await axios.get('http://localhost:8000/api/chargements/historique', {
+      headers: { Authorization: `Bearer ${token}` },
+      params
+    });
+
+    setChargements(response.data.data.data);
+    setTotal(response.data.total);
+  } catch (error) {
+    console.error('Erreur:', error);
+    setError("Erreur lors du chargement de l'historique");
+  } finally {
+    setLoading(false);
+  }
+};
+
 
   useEffect(() => {
     fetchHistorique();
@@ -144,7 +302,6 @@ const handleFilterChange = (field, value) => {
       <Typography variant="h4" component="h1" gutterBottom>
         Historique des Chargements
       </Typography>
-
       {/* Filtres */}
       <Paper sx={{ p: 2, mb: 3 }}>
         <Grid container spacing={2} alignItems="center">
@@ -238,6 +395,13 @@ const handleFilterChange = (field, value) => {
         </Grid>
       </Paper>
       {/* Tableau */}
+        {editSuccess && (
+          <Box sx={{ mb: 2 }}>
+            <Alert severity="success" variant="filled" sx={{ borderRadius: 2 }}>
+              {editSuccess}
+            </Alert>
+          </Box>
+        )}
       <Paper sx={{ overflow: 'hidden' }}>
           <>
             <TableContainer>
@@ -253,6 +417,24 @@ const handleFilterChange = (field, value) => {
                        onChange={(e) => handleFilterChange('datetime_chargement', e.target.value)}
                         InputLabelProps={{ shrink: true }}
                       />
+                  </TableCell>
+                  <TableCell>
+                    Shift
+                    <Autocomplete
+                      freeSolo
+                      options={[1, 2, 3]} // options proposées
+                      value={filters.shift}
+                      onChange={(event, newValue) => handleFilterChange('shift', newValue)}
+                      onInputChange={(event, newInputValue) => handleFilterChange('shift', newInputValue)}
+                      sx={{ width: 60 }} // largeur maximale du champ
+                      renderInput={(params) => (
+                        <TextField
+                          {...params}
+                          variant="standard"
+                          placeholder="Filtrer..."
+                        />
+                      )}
+                    />
                   </TableCell>
                       <TableCell>
                         Wagon
@@ -274,12 +456,39 @@ const handleFilterChange = (field, value) => {
                       </TableCell>
                       <TableCell>
                         Pièces
-                        <TextField
-                          variant="standard"
-                          value={filters.pieces}
-                          onChange={(e) => handleFilterChange('pieces', e.target.value)}
-                          placeholder="Filtrer..."
-                        />
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          {/* TextField pour filtrer */}
+                          <TextField
+                            variant="standard"
+                            value={filters.pieces}
+                            onChange={(e) => handleFilterChange('pieces', e.target.value)}
+                            placeholder="Filtrer..."
+                            sx={{ width: 60 }}
+                          />
+
+                          {/* Bouton tri cyclique */}
+                          <Button
+                            variant="text"
+                            size="small"
+                            onClick={() => {
+                              let nextOrder;
+                              if (piecesSortOrder === null) nextOrder = 'desc';
+                              else if (piecesSortOrder === 'desc') nextOrder = 'asc';
+                              else nextOrder = null; // retour au tri par défaut
+
+                              setPiecesSortOrder(nextOrder);
+
+                              if (nextOrder) {
+                                fetchHistorique({ sort_field: 'total_pieces', sort_order: nextOrder });
+                              } else {
+                                fetchHistorique(); // tri par défaut
+                              }
+                            }}
+                            sx={{ minWidth: '30px', padding: 0 }}
+                          >
+                            {piecesSortOrder === null ? '⇅' : piecesSortOrder === 'desc' ? '▼' : '▲'}
+                          </Button>
+                        </Box>
                       </TableCell>
                       <TableCell>
                         Statut
@@ -309,7 +518,7 @@ const handleFilterChange = (field, value) => {
                           placeholder="Filtrer..."
                         />
                       </TableCell>
-                      <TableCell>Actions</TableCell>
+                      <TableCell sx={{ width: '160px' }}>Actions</TableCell>
                     </TableRow>
                   </TableHead>
                   {loading ? (
@@ -323,6 +532,7 @@ const handleFilterChange = (field, value) => {
                   {chargements.map((chargement) => (
                     <TableRow key={chargement.id}>
                       <TableCell>{formatDate(chargement.datetime_chargement)}</TableCell>
+                      <TableCell>{chargement.shift || '-'}</TableCell>
                       <TableCell>{chargement.wagon?.num_wagon || 'N/A'}</TableCell>
                       <TableCell>{chargement.four?.num_four || 'N/A'}</TableCell>
                       <TableCell>
@@ -344,15 +554,26 @@ const handleFilterChange = (field, value) => {
                         {chargement.user?.matricule || "-"}
                       </TableCell>
                       <TableCell>
-                        <Tooltip title="Voir détails">
-                          <IconButton
-                            onClick={() => handleViewDetails(chargement)}
-                            color="primary"
+                      <Tooltip title="Voir détails">
+                        <IconButton onClick={() => handleViewDetails(chargement)} color="primary">
+                          <VisibilityIcon />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title="Modifier">
+                        <IconButton color="secondary" 
+                        onClick={() => handleEdit(chargement)}>
+                        <EditIcon />
+                      </IconButton>
+                      </Tooltip>
+                      <Tooltip title="Supprimer">
+                        <IconButton
+                            color="error"
+                            onClick={() =>setChargementToDelete(chargement)}
                           >
-                            <VisibilityIcon />
-                          </IconButton>
-                        </Tooltip>
-                      </TableCell>
+                            <DeleteIcon />
+                        </IconButton>
+                      </Tooltip>
+                    </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -372,89 +593,314 @@ const handleFilterChange = (field, value) => {
             />
           </>
       </Paper>
+      {/* Dialog confirmation suppression chargement */}
+                  <Dialog
+                    open={chargementToDelete !== null}
+                    onClose={() => setChargementToDelete(null)}
+                  >
+                    <DialogTitle>Confirmer la suppression</DialogTitle>
+                    <DialogContent>
+                      <Box display="flex" alignItems="center" gap={2}>
+                        <WarningIcon color="warning" sx={{ fontSize: 50 }} />
+                          <Typography>
+                            Êtes-vous sûr de vouloir supprimer le chargement #
+                            {chargementToDelete?.id} ?
+                          </Typography>
+                      </Box>
+                    </DialogContent>
+                    <DialogActions>
+                      <Button onClick={() => setChargementToDelete(null)} color="primary">
+                        Annuler
+                      </Button>
+                      <Button
+                        onClick={async () => {
+                          try {
+                            const token = localStorage.getItem("token");
+                            const response = await axios.delete(
+                              `http://localhost:8000/api/chargements/${chargementToDelete.id}`,
+                              { headers: { Authorization: `Bearer ${token}` } }
+                            );
 
-      {/* Modal de détails */}
-      <Modal open={showDetailsModal} onClose={() => setShowDetailsModal(false)}>
-        <Box sx={{
-          position: 'absolute',
-          top: '50%',
-          left: '50%',
-          transform: 'translate(-50%, -50%)',
-          width: 600,
-          bgcolor: 'background.paper',
-          boxShadow: 24,
-          p: 4,
-          borderRadius: 2
-        }}>
-          {selectedChargement && (
-            <>
-              <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
-                <Typography variant="h6">Détails du chargement #{selectedChargement.id}</Typography>
-                <IconButton onClick={() => setShowDetailsModal(false)}>
-                  <CloseIcon />
-                </IconButton>
-              </Box>
+                            // Supprime du tableau local
+                            setChargements(prev => prev.filter(c => c.id !== chargementToDelete.id));
 
-              <Grid container spacing={2} sx={{ mb: 2 }}>
-                <Grid item xs={6}>
-                  <Typography variant="subtitle2">Wagon:</Typography>
-                  <Typography>{selectedChargement.wagon?.num_wagon || 'N/A'}</Typography>
-                </Grid>
-                <Grid item xs={6}>
-                  <Typography variant="subtitle2">Four:</Typography>
-                  <Typography>{selectedChargement.four?.num_four || 'N/A'}</Typography>
-                </Grid>
-                <Grid item xs={6}>
-                  <Typography variant="subtitle2">Date Chargement:</Typography>
-                  <Typography>{formatDate(selectedChargement.datetime_chargement)}</Typography>
-                </Grid>
-                <Grid item xs={6}>
-                  <Typography variant="subtitle2">Statut:</Typography>
-                  <Chip 
-                    label={selectedChargement.statut} 
-                    color={getStatusColor(selectedChargement.statut)}
-                    size="small"
+                            // Affiche le message du backend
+                            alert(response.data?.message || "Chargement supprimé avec succès ✅");
+
+                          } catch (err) {
+                            console.error(err);
+                            alert(err.response?.data?.message || "Erreur lors de la suppression du chargement.");
+                          } finally {
+                            setChargementToDelete(null);
+                          }
+                        }}
+                        color="error"
+                        variant="contained"
+                      >
+                        Supprimer
+                      </Button>
+                    </DialogActions>
+                  </Dialog>
+            {/* Modal d'édition */}
+                <Modal open={showEditModal} onClose={() => setShowEditModal(false)}>
+              <Box sx={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", width: 600, bgcolor: "background.paper", boxShadow: 24, p: 4, borderRadius: 2 }}>
+                 {editError && (
+                    <Box sx={{ mb: 2 }}>
+                      <Alert severity="error" variant="filled" sx={{ borderRadius: 2 }}>
+                        {editError}
+                      </Alert>
+                    </Box>
+                  )}
+                <Typography variant="h6" gutterBottom>Modifier le chargement #{selectedChargement?.id}</Typography>
+                <form onSubmit={handleEditSubmit}>
+          
+                  {/* Wagon */}
+                  <Autocomplete
+                    options={wagons}
+                    getOptionLabel={w => `${w.num_wagon} - Statut: ${w.statut}`}
+                    value={wagons.find(w => w.id_wagon === editFormData.wagon_id) || null}
+                    onChange={(e, newValue) => setEditFormData({...editFormData, wagon_id: newValue ? newValue.id_wagon : ''})}
+                    renderInput={(params) => <TextField {...params} label="Wagon" required margin="normal" />}
                   />
-                </Grid>
-                <Grid item xs={6}>
-                  <Typography variant="subtitle2">Enregistré par:</Typography>
-                  <Typography>
-                    {selectedChargement.user?.nom} {selectedChargement.user?.prenom}
-                  </Typography>
-                </Grid>
-                <Grid item xs={6}>
-                  <Typography variant="subtitle2">Total pièces:</Typography>
-                  <Typography>
-                    {selectedChargement.details.reduce((sum, detail) => sum + detail.quantite, 0)}
-                  </Typography>
-                </Grid>
-              </Grid>
 
-              <Divider sx={{ my: 2 }} />
-
-              <Typography variant="h6" gutterBottom>Détails des pièces</Typography>
-              <TableContainer component={Paper} variant="outlined">
-                <Table size="small">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Famille</TableCell>
-                      <TableCell align="right">Quantité</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {selectedChargement.details.map((detail, index) => (
-                      <TableRow key={index}>
-                        <TableCell>{detail.famille?.nom_famille || 'N/A'}</TableCell>
-                        <TableCell align="right">{detail.quantite}</TableCell>
-                      </TableRow>
+                  {/* Four */}
+                  <Select
+                    fullWidth
+                    value={editFormData.four_id || ''}
+                    onChange={(e) => setEditFormData({...editFormData, four_id: e.target.value})}
+                    margin="normal"
+                  >
+                    {fours.map(four => (
+                      <MenuItem key={four.id_four} value={four.id_four}>
+                        {four.num_four} - Cadence: {four.cadence}
+                      </MenuItem>
                     ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            </>
-          )}
-        </Box>
-      </Modal>
+                  </Select>
+                 {/* Familles */}
+                  <Typography variant="subtitle1" sx={{ mb: 2 }}>Familles et quantités</Typography>
+                  <Box sx={{ mt: 1 }}> {/* juste un petit espace */}
+                  {editFormData.familles.map((famille, index) => (
+                    <Grid container spacing={1} alignItems="center" key={index} sx={{ mb: 1 }}>
+                      {/* Autocomplete pour la famille */}
+                      <Grid item>
+                        <Autocomplete
+                          freeSolo
+                          options={familles.map(f => f.nom_famille)}
+                          value={famille.nom_famille || ''}
+                          onChange={(e, newValue) => {
+                            const newFamilles = [...editFormData.familles];
+                            const selected = familles.find(f => f.nom_famille === newValue);
+                            newFamilles[index] = {
+                              ...newFamilles[index],
+                              id_famille: selected ? selected.id_famille : '',
+                              nom_famille: newValue
+                            };
+                            setEditFormData({ ...editFormData, familles: newFamilles });
+                          }}
+                          onInputChange={(e, newInputValue) => {
+                            const newFamilles = [...editFormData.familles];
+                            newFamilles[index] = { ...newFamilles[index], nom_famille: newInputValue };
+                            setEditFormData({ ...editFormData, familles: newFamilles });
+                          }}
+                          renderInput={(params) => <TextField {...params} label="Famille" />}
+                          sx={{ width: '250px' }} // largeur fixe
+                        />
+                      </Grid>
+
+                      {/* Quantité */}
+                      <Grid item>
+                        <TextField
+                          type="number"
+                          value={famille.quantite}
+                           onFocus={() => {
+                            if (famille.quantite === 0 || famille.quantite === '0') {
+                              const newFamilles = [...editFormData.familles];
+                              newFamilles[index].quantite = '';
+                              setEditFormData({ ...editFormData, familles: newFamilles });
+                            }
+                          }}
+                          onBlur={() => {
+                            if (famille.quantite === '' || famille.quantite === null) {
+                              const newFamilles = [...editFormData.familles];
+                              newFamilles[index].quantite = 0;
+                              setEditFormData({ ...editFormData, familles: newFamilles });
+                            }
+                          }}
+                           onChange={(e) => {
+                             let value = e.target.value;
+                            // Supprimer le "0" au début si l’utilisateur tape un autre chiffre
+                            if (value.length > 1 && value.startsWith("0")) {
+                              value = value.replace(/^0+/, "");
+                            }
+                            const newFamilles = [...editFormData.familles];
+                            newFamilles[index].quantite = value === "" ? "" : parseInt(value);
+                            setEditFormData({ ...editFormData, familles: newFamilles });
+                          }}
+                          sx={{ width: '50%' }} // largeur fixe
+                        />
+                      </Grid>
+
+                      {/* Supprimer */}
+                      <Grid item>
+                        <IconButton color="error" onClick={() => setConfirmDeleteIndex(index)}>
+                          <CloseIcon />
+                        </IconButton>
+                      </Grid>
+                    </Grid>
+                  ))}
+                  </Box>
+                  {/* Dialog confirmation suppression */}
+                  <Dialog
+                    open={confirmDeleteIndex !== null}
+                    onClose={() => setConfirmDeleteIndex(null)}
+                  >
+                    <DialogTitle>Confirmer la suppression</DialogTitle>
+                    <DialogContent>
+                      <Typography>
+                        Êtes-vous sûr de vouloir supprimer la famille "
+                        {confirmDeleteIndex !== null && editFormData.familles[confirmDeleteIndex].nom_famille}" ?
+                      </Typography>
+                    </DialogContent>
+                    <DialogActions>
+                      <Button onClick={() => setConfirmDeleteIndex(null)} color="primary">
+                        Annuler
+                      </Button>
+                      <Button
+                        onClick={() => {
+                          const newFamilles = editFormData.familles.filter(
+                            (_, i) => i !== confirmDeleteIndex
+                          );
+                          setEditFormData({ ...editFormData, familles: newFamilles });
+                          setConfirmDeleteIndex(null);
+                        }}
+                        color="error"
+                        variant="contained"
+                      >
+                        Supprimer
+                      </Button>
+                    </DialogActions>
+                  </Dialog>
+                 <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>
+                <Button
+                  type="button"
+                  onClick={() =>
+                    setEditFormData({
+                      ...editFormData,
+                      familles: [...editFormData.familles, { id_famille: '', nom_famille: '', quantite: 0 }]
+                    })
+                  }
+                >
+                  Ajouter une famille
+                </Button>
+
+                <Button type="submit" variant="contained" disabled={loadingSubmit}>
+                  {loadingSubmit ? <CircularProgress size={24} /> : 'Enregistrer'}
+                </Button>
+                
+                {/* Bouton Annuler */}
+               <Button
+                type="button"
+                variant="outlined"
+                color="error"
+                onClick={() => setShowEditModal(false)}
+                >
+                Annuler
+                </Button>
+              </Box>
+                </form>
+              </Box>
+            </Modal>
+                  {/* Modal de détails */}
+            <Modal open={showDetailsModal} onClose={() => setShowDetailsModal(false)}>
+              <Box sx={{
+                position: 'absolute',
+                top: '50%',
+                left: '50%',
+                transform: 'translate(-50%, -50%)',
+                width: 600,
+                maxHeight: '80vh',
+                overflowY: 'auto',
+                bgcolor: 'background.paper',
+                boxShadow: 24,
+                p: 4,
+                borderRadius: 2
+              }}>
+                {selectedChargement && (
+                  <>
+                    <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
+                      <Typography variant="h6">Détails du chargement #{selectedChargement.id}</Typography>
+                      <IconButton onClick={() => setShowDetailsModal(false)}>
+                        <CloseIcon />
+                      </IconButton>
+                    </Box>
+
+                    <Grid container spacing={2} sx={{ mb: 2 }}>
+                      <Grid item xs={6}>
+                        <Typography variant="subtitle2">Wagon:</Typography>
+                        <Typography>{selectedChargement.wagon?.num_wagon || 'N/A'}</Typography>
+                      </Grid>
+                      <Grid item xs={6}>
+                        <Typography variant="subtitle2">Four:</Typography>
+                        <Typography>{selectedChargement.four?.num_four || 'N/A'}</Typography>
+                      </Grid>
+                      <Grid item xs={6}>
+                        <Typography variant="subtitle2">Date Chargement:</Typography>
+                        <Typography>{formatDate(selectedChargement.datetime_chargement)}</Typography>
+                      </Grid>
+                      <Grid item xs={6}>
+                        <Typography variant="subtitle2">Statut:</Typography>
+                        <Chip 
+                          label={selectedChargement.statut} 
+                          color={getStatusColor(selectedChargement.statut)}
+                          size="small"
+                        />
+                      </Grid>
+                      <Grid item xs={6}>
+                        <Typography variant="subtitle2">Enregistré par:</Typography>
+                        <Typography>
+                          {selectedChargement.user?.nom} {selectedChargement.user?.prenom}
+                        </Typography>
+                      </Grid>
+                      <Grid item xs={6}>
+                        <Typography variant="subtitle2">Total pièces:</Typography>
+                        <Typography>
+                          {selectedChargement.details.reduce((sum, detail) => sum + detail.quantite, 0)}
+                        </Typography>
+                      </Grid>
+                    </Grid>
+
+                    <Divider sx={{ my: 2 }} />
+
+                    <Typography variant="h6" gutterBottom>Détails des pièces</Typography>
+                    <TableContainer component={Paper} variant="outlined">
+                      <Table size="small">
+                        <TableHead>
+                          <TableRow>
+                            <TableCell>Famille</TableCell>
+                            <TableCell align="right">Quantité</TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {selectedChargement.details && selectedChargement.details.length > 0 ? (
+                            selectedChargement.details.map((detail, index) => (
+                              <TableRow key={index}>
+                                <TableCell>{detail.famille?.nom_famille || 'N/A'}</TableCell>
+                                <TableCell align="right">{detail.quantite}</TableCell>
+                              </TableRow>
+                            ))
+                          ) : (
+                            <TableRow>
+                              <TableCell colSpan={2} align="center">Aucune famille associée</TableCell>
+                            </TableRow>
+                          )}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                  </>
+                )}
+              </Box>
+            </Modal>
+
     </Box>
   );
 };

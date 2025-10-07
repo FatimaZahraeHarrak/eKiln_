@@ -4,6 +4,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\UserController;
+use Illuminate\Support\Facades\DB;
+use App\Http\Controllers\ArchiveChargementController;
 
 Route::post('/login', [AuthController::class, 'login']);
 Route::middleware('auth:sanctum')->get('/me', function () {
@@ -149,3 +151,15 @@ Route::middleware('auth:api')->group(function () {
     Route::get('/affectations/productivity', [AffectationController::class, 'productivity']);
 });
 Route::get('/total-pieces-by-shift', [ChargementController::class, 'getTotalPiecesByShift'])->middleware('auth:sanctum');
+Route::put('/chargements/{chargement}', [ChargementController::class, 'update']);
+// Route::delete('/chargements/{chargement}', [ChargementController::class, 'destroy']);
+Route::middleware('auth:sanctum')->group(function () {
+    Route::delete('/chargements/{chargement}', [ChargementController::class, 'destroy']);
+    Route::get('/archives-chargements', [ArchiveChargementController::class, 'index']); // si tu veux la route archives aussi
+});
+// Route::get('/archives-chargements', function () {
+//     $archives = DB::table('archives_chargements')->orderByDesc('date_suppression')->get();
+//     return response()->json(['data' => $archives]);
+// });
+// Route::get('/archives-chargements', [ArchiveChargementController::class, 'index']);
+
