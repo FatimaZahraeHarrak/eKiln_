@@ -7,9 +7,15 @@ import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import { createTheme, ThemeProvider } from '@mui/material/styles';
 import BlockIcon from '@mui/icons-material/Block';
-import EditIcon from '@mui/icons-material/Edit';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import DeleteIcon from '@mui/icons-material/Delete';
+import eKilnLogo from '../components/assets/eKiln.png'; // Adjust path as needed
+import {
+  DataGrid,
+  GridToolbarContainer,
+  GridToolbarExport
+} from '@mui/x-data-grid';
+import { frFR } from '@mui/x-data-grid/locales'; // Example: French localization
 
 import FamillesContent from './FamillesContent';
 import HistoriqueChargement from './HistoriqueChargement';
@@ -63,8 +69,6 @@ import AffectationContent from '../components/AffectationContent';
 import SettingsIcon from '@mui/icons-material/Settings';
 import { Edit, Check, X, Settings, Clock, Zap, AlertCircle, CheckCircle2, XCircle } from 'lucide-react';
 import WagonVisualization from './WagonVisualization';
-import { useNavigate } from 'react-router-dom';
-
 
 // the sidebar
 const NAVIGATION = [
@@ -103,7 +107,7 @@ const NAVIGATION = [
   segment: 'historique',
   title: 'Historique Chargements',
   icon: <HistoryIcon />,
-},
+  },
   {
     segment: 'affectation',
     title: 'Affectation des Trieurs',
@@ -114,7 +118,7 @@ const NAVIGATION = [
     title: 'Chargement Wagon',
     icon: <LocalShippingIcon />,
   },
-  {
+  /*{
     segment: 'familles',
       title: 'Gestion des Familles',
       icon: <ListAltIcon />,
@@ -126,13 +130,18 @@ const NAVIGATION = [
   },
   {
     kind: 'divider',
-  },
+  },*/
   {
     segment: 'logout',
     title: 'Déconnexion',
     icon: <LogoutIcon color="error" />,
   },
 ];
+const CustomToolbar = () => (
+  <GridToolbarContainer>
+    <GridToolbarExport csvOptions={{ fileName: 'wagons_export' }} />
+  </GridToolbarContainer>
+);
 
 // Create theme
 const theme = createTheme({
@@ -423,13 +432,13 @@ const ChargementContent = () => {
   const [chargementCount, setChargementCount] = useState(0); // Nouvel état pour le nombre de chargements
   const wagonRef = useRef(null);
   const messageRef = useRef(null);
-  const [_isEditing, setIsEditing] = useState({});
+  const [user,setUser]=useState(null);
 
   useEffect(() => {
     const fetchInitialData = async () => {
       try {
         const token = localStorage.getItem("token");
-        const [famillesRes, foursRes, wagonsRes] = await Promise.all([
+        const [famillesRes, foursRes, wagonsRes, userRes] = await Promise.all([
           axios.get("http://localhost:8000/api/familles", {
             headers: { Authorization: `Bearer ${token}` },
           }),
@@ -439,11 +448,15 @@ const ChargementContent = () => {
           axios.get("http://localhost:8000/api/wagons1", {
             headers: { Authorization: `Bearer ${token}` },
           }),
+          axios.get("http://localhost:8000/api/me", {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
         ]);
 
         setFamilles(famillesRes.data);
         setFours(foursRes.data);
         setWagons(wagonsRes.data.data);
+        setUser(userRes.data);
 
         const initialQuantites = {};
         famillesRes.data.forEach(famille => {
@@ -540,7 +553,7 @@ const ChargementContent = () => {
 
   const resetForm = () => {
     //setWagonNum("");
-    // setSelectedFour("");
+    //setSelectedFour("");
     setSelectedWagon("");
     const resetQuantites = {};
     familles.forEach(famille => {
@@ -581,7 +594,7 @@ const ChargementContent = () => {
 
     const totalPieces = chargements.reduce((sum, chargement) => {
       return sum + (chargement.details
-        ? chargement.details.reduce((detSum, detail) => detSum + detail.quantite, 0)
+        ? chargement.details.reduce((detSum, detail) => detSum + Number(detail.quantite), 0)
         : 0);
     }, 0);
 
@@ -632,20 +645,21 @@ useEffect(() => {
       }
     }
   };
-const fourRef = useRef(null);
-const [fourOpen, setFourOpen] = useState(false);
+  const fourRef = useRef(null);
+  const [fourOpen, setFourOpen] = useState(false);
 
-// Ref pour savoir si le menu a déjà été ouvert une fois
-const hasOpenedFourOnce = useRef(false);
+  // Ref pour savoir si le menu a déjà été ouvert une fois
+  const hasOpenedFourOnce = useRef(false);
 
-// Quand le wagon change → focus + ouvrir le menu **une seule fois**
-useEffect(() => {
-  if (selectedWagon && fourRef.current && !hasOpenedFourOnce.current) {
-    fourRef.current.focus();       // focus visible
-    setFourOpen(true);             // ouvre le menu
-    hasOpenedFourOnce.current = true; // on ne le refait plus
-  }
-}, [selectedWagon]);
+  // Quand le wagon change → focus + ouvrir le menu **une seule fois**
+  useEffect(() => {
+    if (selectedWagon && fourRef.current && !hasOpenedFourOnce.current) {
+      fourRef.current.focus();       // focus visible
+      setFourOpen(true);             // ouvre le menu
+      hasOpenedFourOnce.current = true; // on ne le refait plus
+    }
+  }, [selectedWagon]);
+
   return (
     <Box sx={{ p: 3 }}>
       {error && (
@@ -701,7 +715,7 @@ useEffect(() => {
                         <TableCell>{new Date(chargement.datetime_chargement).toLocaleString()}</TableCell>
                         <TableCell>{chargement.wagon?.num_wagon}</TableCell>
                         <TableCell>{chargement.four?.num_four}</TableCell>
-                        <TableCell>{chargement.user?.nom} {chargement.user?.prenom}</TableCell>
+                        <TableCell>{chargement.user?.nom.toUpperCase()} {chargement.user?.prenom.toUpperCase()}</TableCell>
                         <TableCell>{chargement.statut}</TableCell>
                         <TableCell align="center">
                           <IconButton
@@ -730,10 +744,10 @@ useEffect(() => {
           <Box component="form" onSubmit={handleSubmit} noValidate>
               <Grid container spacing={3}>
                            {/* Wagon Autocomplete */}
-                           <Grid item xs={12} md={6} width="240px">
+                           <Grid item xs={12} md={6} width="180px">
                              <Autocomplete
                                options={wagons}
-                               getOptionLabel={(wagon) => `${wagon.num_wagon} - Statut: ${wagon.statut}`}
+                               getOptionLabel={(wagon) => `Wagon : ${wagon.num_wagon}`}
                                value={wagons.find(w => w.id_wagon === selectedWagon) || null}
                                onChange={(event, newValue) => {
                                  setSelectedWagon(newValue ? newValue.id_wagon : '');
@@ -761,18 +775,18 @@ useEffect(() => {
                                  value={selectedFour}
                                  label="Four"
                                  inputRef={fourRef}
-                                open={fourOpen}
-                                onOpen={() => setFourOpen(true)}
-                                onClose={() => setFourOpen(false)}
-                                onChange={(e) => {
-                                  setSelectedFour(e.target.value);
-                                  setFourOpen(false); // referme après sélection
-                                }}
+                                 open={fourOpen}
+                                 onOpen={() => setFourOpen(true)}
+                                 onClose={() => setFourOpen(false)}
+                                 onChange={(e) => {
+                                   setSelectedFour(e.target.value);
+                                   setFourOpen(false); // referme après sélection
+                                 }}
                                  sx={{ '& .MuiSelect-select': { width: '140px' } }}
                                >
-                                 {/* <MenuItem value="">
+                                 <MenuItem value="">
                                    <em>Sélectionnez un four</em>
-                                 </MenuItem> */}
+                                 </MenuItem>
                                  {fours.map((four) => (
                                    <MenuItem key={four.id_four} value={four.id_four}>
                                      {four.num_four} - Cadence: {four.cadence}
@@ -787,11 +801,12 @@ useEffect(() => {
                              <Grid item xs={12} md={4}>
                                <Paper elevation={3} sx={{ p: 2, textAlign: 'center' }}>
                                  <Typography variant="h6" gutterBottom>
-                                   Title 1
-                                 </Typography>
-                                 <Typography variant="subtitle2" color="text.secondary">
-                                   Nom
-                                 </Typography>
+                                    {user?.matricule.toUpperCase() ?? "N/A"}
+                                  </Typography>
+            
+                                  <Typography variant="subtitle2" color="text.secondary">
+                                    {user?.nom.toUpperCase() ?? "N/A"} {user?.prenom.toUpperCase() ?? "N/A"}
+                                  </Typography>
                                </Paper> 
                              </Grid>
            
@@ -816,6 +831,17 @@ useEffect(() => {
                                  </Typography>
                                </Paper>
                              </Grid>
+
+                             <Grid item xs={12} md={4}>
+                                <Paper elevation={3} sx={{ p: 2, textAlign: 'center' }}>
+                                  <Typography variant="h6" gutterBottom>
+                                {chargementCount==0 ? 0 : (totalPieces / chargementCount).toFixed(2)} 
+                                  </Typography>
+                                  <Typography variant="subtitle2" color="text.secondary">
+                                    Densite
+                                  </Typography>
+                                </Paper>
+                              </Grid>
                            </Grid>
                          </Grid>
 
@@ -823,165 +849,165 @@ useEffect(() => {
               Détails du chargement
             </Typography>
             
-          <TableContainer component={Paper} variant="outlined">
-                  <Table aria-label="details table" size="small">
-                    <TableBody>
-                      {(() => {
-                        const listeSpeciale = [ "Cuvette", "Reservoir","colonne" ,"lavabo","Cache siphon"];
+            <TableContainer component={Paper} variant="outlined">
+              <Table aria-label="details table" size="small">
+                <TableBody>
+                  {(() => {
+                    const listeSpeciale = [ "Cuvette", "Reservoir","colonne" ,"lavabo","Cache siphon"];
 
-                        // 1 Récupérer les familles spéciales dans l'ordre
-                        const special = listeSpeciale
-                          .map(name =>
-                            familles.find(f => f.nom_famille.toLowerCase() === name.toLowerCase())
-                          )
-                          .filter(Boolean);
+                    // 1 Récupérer les familles spéciales dans l'ordre
+                    const special = listeSpeciale
+                      .map(name =>
+                        familles.find(f => f.nom_famille.toLowerCase() === name.toLowerCase())
+                      )
+                      .filter(Boolean);
 
-                        // 2 Balaste & Couvercles
-                        const balaste = familles.find(f => f.nom_famille === "Balaste");
-                        const couvercles = familles.find(f => f.nom_famille === "Couvercles");
+                    // 2 Balaste & Couvercles
+                    const balaste = familles.find(f => f.nom_famille === "Balaste");
+                    const couvercles = familles.find(f => f.nom_famille === "Couvercles");
 
-                        // 3 Le reste
-                        const reste = familles
-                          .filter(
-                            f =>
-                              !listeSpeciale.map(x => x.toLowerCase()).includes(f.nom_famille.toLowerCase()) &&
-                              !["Balaste", "Couvercles"].includes(f.nom_famille)
-                          )
-                          .sort((a, b) => a.nom_famille.localeCompare(b.nom_famille));
+                    // 3 Le reste
+                    const reste = familles
+                      .filter(
+                        f =>
+                          !listeSpeciale.map(x => x.toLowerCase()).includes(f.nom_famille.toLowerCase()) &&
+                          !["Balaste", "Couvercles"].includes(f.nom_famille)
+                      )
+                      .sort((a, b) => a.nom_famille.localeCompare(b.nom_famille));
 
-                        //  Construire l'ordre final
-                        const ordre = [...special, ...reste];
+                    //  Construire l'ordre final
+                    const ordre = [...special, ...reste];
 
-                        // 4 Découper en colonnes
-                        const mid = Math.ceil(ordre.length / 2);
-                        let col1 = ordre.slice(0, mid);
-                        let col2 = ordre.slice(mid);
+                    // 4 Découper en colonnes
+                    const mid = Math.ceil(ordre.length / 2);
+                    let col1 = ordre.slice(0, mid);
+                    let col2 = ordre.slice(mid);
 
-                        // 5 Ajouter Balaste à gauche, Couvercles à droite
-                        if (balaste) col1.push(balaste);
-                        if (couvercles) col2.push(couvercles);
+                    // 5 Ajouter Balaste à gauche, Couvercles à droite
+                    if (balaste) col1.push(balaste);
+                    if (couvercles) col2.push(couvercles);
 
-                        const maxRows = Math.max(col1.length, col2.length);
+                    const maxRows = Math.max(col1.length, col2.length);
 
-                        return Array.from({ length: maxRows }).map((_, rowIndex) => {
-                          const famille1 = col1[rowIndex];
-                          const famille2 = col2[rowIndex];
+                    return Array.from({ length: maxRows }).map((_, rowIndex) => {
+                      const famille1 = col1[rowIndex];
+                      const famille2 = col2[rowIndex];
 
-                          return (
-                            <TableRow key={rowIndex}>
-                              {/* Colonne 1 */}
-                              <TableCell>{famille1?.nom_famille || ""}</TableCell>
+                      return (
+                        <TableRow key={rowIndex}>
+                          {/* Colonne 1 */}
+                          <TableCell>{famille1?.nom_famille || ""}</TableCell>
+                          <TableCell>
+                            {famille1 && (
+                              <TextField
+                                type="text"
+                                variant="outlined"
+                                size="small"
+                                value={
+                                  quantites[famille1.id_famille] === 0
+                                    ? "0"
+                                    : quantites[famille1.id_famille]
+                                }
+                                onFocus={() => {
+                                  if ((quantites[famille1.id_famille] || 0) === 0) {
+                                    setQuantites(prev => ({
+                                      ...prev,
+                                      [famille1.id_famille]: ""
+                                    }));
+                                    setIsEditing(prev => ({
+                                      ...prev,
+                                      [famille1.id_famille]: true
+                                    }));
+                                  }
+                                }}
+                                onChange={e => {
+                                  const val = e.target.value.replace(/[^0-9]/g, "");
+                                  handleQuantiteChange(
+                                    famille1.id_famille,
+                                    val === "" ? 0 : Number(val)
+                                  );
+                                }}
+                                onBlur={e => {
+                                  if (e.target.value === "")
+                                    handleQuantiteChange(famille1.id_famille, 0);
+                                }}
+                                fullWidth
+                                sx={{
+                                  backgroundColor:
+                                    famille1.nom_famille === "Balaste" ||
+                                    famille1.nom_famille === "Couvercles"
+                                      ? "#f8d7da" // rouge clair
+                                      : quantites[famille1.id_famille] > 0
+                                      ? "#d1f7c4" // vert si rempli
+                                      : "inherit"
+                                }}
+                              />
+                            )}
+                          </TableCell>
+
+                          {/* Colonne 2 */}
+                          {famille2 ? (
+                            <>
+                              <TableCell>{famille2.nom_famille}</TableCell>
                               <TableCell>
-                                {famille1 && (
-                                  <TextField
-                                    type="text"
-                                    variant="outlined"
-                                    size="small"
-                                    value={
-                                      quantites[famille1.id_famille] === 0
-                                        ? "0"
-                                        : quantites[famille1.id_famille]
+                                <TextField
+                                  type="text"
+                                  variant="outlined"
+                                  size="small"
+                                  value={
+                                    quantites[famille2.id_famille] === 0
+                                      ? "0"
+                                      : quantites[famille2.id_famille]
+                                  }
+                                  onFocus={() => {
+                                    if ((quantites[famille2.id_famille] || 0) === 0) {
+                                      setQuantites(prev => ({
+                                        ...prev,
+                                        [famille2.id_famille]: ""
+                                      }));
+                                      setIsEditing(prev => ({
+                                        ...prev,
+                                        [famille2.id_famille]: true
+                                      }));
                                     }
-                                    onFocus={() => {
-                                      if ((quantites[famille1.id_famille] || 0) === 0) {
-                                        setQuantites(prev => ({
-                                          ...prev,
-                                          [famille1.id_famille]: ""
-                                        }));
-                                        setIsEditing(prev => ({
-                                          ...prev,
-                                          [famille1.id_famille]: true
-                                        }));
-                                      }
-                                    }}
-                                    onChange={e => {
-                                      const val = e.target.value.replace(/[^0-9]/g, "");
-                                      handleQuantiteChange(
-                                        famille1.id_famille,
-                                        val === "" ? 0 : Number(val)
-                                      );
-                                    }}
-                                    onBlur={e => {
-                                      if (e.target.value === "")
-                                        handleQuantiteChange(famille1.id_famille, 0);
-                                    }}
-                                    fullWidth
-                                    sx={{
-                                      backgroundColor:
-                                        famille1.nom_famille === "Balaste" ||
-                                        famille1.nom_famille === "Couvercles"
-                                          ? "#f8d7da" // rouge clair
-                                          : quantites[famille1.id_famille] > 0
-                                          ? "#d1f7c4" // vert si rempli
-                                          : "inherit"
-                                    }}
-                                  />
-                                )}
+                                  }}
+                                  onChange={e => {
+                                    const val = e.target.value.replace(/[^0-9]/g, "");
+                                    handleQuantiteChange(
+                                      famille2.id_famille,
+                                      val === "" ? 0 : Number(val)
+                                    );
+                                  }}
+                                  onBlur={e => {
+                                    if (e.target.value === "")
+                                      handleQuantiteChange(famille2.id_famille, 0);
+                                  }}
+                                  fullWidth
+                                  sx={{
+                                    backgroundColor:
+                                      famille2.nom_famille === "Balaste" ||
+                                      famille2.nom_famille === "Couvercles"
+                                        ? "#f8d7da"
+                                        : quantites[famille2.id_famille] > 0
+                                        ? "#d1f7c4"
+                                        : "inherit"
+                                  }}
+                                />
                               </TableCell>
-
-                              {/* Colonne 2 */}
-                              {famille2 ? (
-                                <>
-                                  <TableCell>{famille2.nom_famille}</TableCell>
-                                  <TableCell>
-                                    <TextField
-                                      type="text"
-                                      variant="outlined"
-                                      size="small"
-                                      value={
-                                        quantites[famille2.id_famille] === 0
-                                          ? "0"
-                                          : quantites[famille2.id_famille]
-                                      }
-                                      onFocus={() => {
-                                        if ((quantites[famille2.id_famille] || 0) === 0) {
-                                          setQuantites(prev => ({
-                                            ...prev,
-                                            [famille2.id_famille]: ""
-                                          }));
-                                          setIsEditing(prev => ({
-                                            ...prev,
-                                            [famille2.id_famille]: true
-                                          }));
-                                        }
-                                      }}
-                                      onChange={e => {
-                                        const val = e.target.value.replace(/[^0-9]/g, "");
-                                        handleQuantiteChange(
-                                          famille2.id_famille,
-                                          val === "" ? 0 : Number(val)
-                                        );
-                                      }}
-                                      onBlur={e => {
-                                        if (e.target.value === "")
-                                          handleQuantiteChange(famille2.id_famille, 0);
-                                      }}
-                                      fullWidth
-                                      sx={{
-                                        backgroundColor:
-                                          famille2.nom_famille === "Balaste" ||
-                                          famille2.nom_famille === "Couvercles"
-                                            ? "#f8d7da"
-                                            : quantites[famille2.id_famille] > 0
-                                            ? "#d1f7c4"
-                                            : "inherit"
-                                      }}
-                                    />
-                                  </TableCell>
-                                </>
-                              ) : (
-                                <>
-                                  <TableCell></TableCell>
-                                  <TableCell></TableCell>
-                                </>
-                              )}
-                            </TableRow>
-                          );
-                        });
-                      })()}
-                    </TableBody>
-                  </Table>
-               </TableContainer>
+                            </>
+                          ) : (
+                            <>
+                              <TableCell></TableCell>
+                              <TableCell></TableCell>
+                            </>
+                          )}
+                        </TableRow>
+                      );
+                    });
+                  })()}
+                </TableBody>
+              </Table>
+            </TableContainer>
 
             <Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end' }}>
               <Button
@@ -1048,14 +1074,20 @@ useEffect(() => {
                   <Typography variant="body1">{selectedChargement.four?.num_four}</Typography>
                 </Grid>
                 <Grid item xs={6}>
-                  <Typography variant="subtitle2">Date:</Typography>
+                  <Typography variant="subtitle2">Statut:</Typography>
+                  <Typography variant="body1">{selectedChargement.statut}</Typography>
+                </Grid>
+                <Grid item xs={6}>
+                  <Typography variant="subtitle2">Date chargement:</Typography>
                   <Typography variant="body1">
                     {new Date(selectedChargement.datetime_chargement).toLocaleString()}
                   </Typography>
                 </Grid>
                 <Grid item xs={6}>
-                  <Typography variant="subtitle2">Statut:</Typography>
-                  <Typography variant="body1">{selectedChargement.statut}</Typography>
+                  <Typography variant="subtitle2">Date sortie estimée:</Typography>
+                  <Typography variant="body1">
+                    {new Date(selectedChargement.datetime_sortieEstime).toLocaleString()}
+                  </Typography>
                 </Grid>
               </Grid>
               
@@ -1517,432 +1549,331 @@ const ParametrageContent = () => {
 
 // Component: WagonTable
 const WagonTable = ({ fourNum, id_four }) => {
-    const [selectedWagon, setSelectedWagon] = useState(null);
-    const [wagonsData, setWagonsData] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
-    const [currentInterval, setCurrentInterval] = useState('');
-    const [wagonSearch, setWagonSearch] = useState('');
-    const [totalCount, setTotalCount] = useState(0);
-    const [customTrieursNeeded, setCustomTrieursNeeded] = useState(null);
-    const [selectedWagonDetails, setSelectedWagonDetails] = useState(null);
-    const [showWagonDetailsModal, setShowWagonDetailsModal] = useState(false);
-    const [wagonCount, setWagonCount] = useState(id_four === 6 ? 30 : 16); // Valeur par défaut selon le four
-    const [message, setmessage] = useState('');
-    const [filters, setFilters] = useState({ type_wagon: '' });
-    const handleFilterChange = (key, value) => {
-    console.log('Filtre appliqué:', { [key]: value }); // Pour déboguer
-          setFilters((prev) => ({
-              ...prev,
-              [key]: value,
-          }));
-          
-      };
-      
-    const fetchWagonDetails = async (id) => {
-        try {
-            const token = localStorage.getItem('token');
-            const response = await axios.get(
-                `http://localhost:8000/api/chargements/${id}/details-popup`,
-                { headers: { Authorization: `Bearer ${token}` } }
-            );
-            
-            if (response.data.success) {
-                setSelectedWagonDetails(response.data.data);
-                setShowWagonDetailsModal(true);
-            }
-        } catch (error) {
-            console.error("Error fetching wagon details:", error);
-        }
-    };
-
-    const fetchData = async (startFromWagon = null, count = wagonCount) => {
+  const [selectedWagon, setSelectedWagon] = useState(null);
+  const [wagonsData, setWagonsData] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [currentInterval, setCurrentInterval] = useState('');
+  const [wagonSearch, setWagonSearch] = useState('');
+  const [totalCount, setTotalCount] = useState(0);
+  const [customTrieursNeeded, setCustomTrieursNeeded] = useState(null);
+  const [selectedWagonDetails, setSelectedWagonDetails] = useState(null);
+  const [showWagonDetailsModal, setShowWagonDetailsModal] = useState(false);
+  const [wagonCount, setWagonCount] = useState(id_four === 1 ? 30 : 16); // Valeur par défaut selon le four
+  
+  const fetchWagonDetails = async (id) => {
     try {
-        setLoading(true);
         const token = localStorage.getItem('token');
+        const response = await axios.get(
+            `http://localhost:8000/api/chargements/${id}/details-popup`,
+            { headers: { Authorization: `Bearer ${token}` } }
+        );
         
-        const params = { 
-            id_four: id_four,
-            limit: count,
-            ...(startFromWagon && { start_from_wagon: startFromWagon })
-        };
-
-                // Requête pour les wagons
-        const wagonsResponse = await axios.get('http://localhost:8000/api/chargements/interval', {
-            headers: { 'Authorization': `Bearer ${token}` },
-            params: params
-        });
-        // Si backend renvoie un message (wagon hors shift ou inexistant)
-       if (wagonsResponse.data.message) {
-        setmessage(wagonsResponse.data.message);
-        setTimeout(() => setmessage(''), 5000);
-    }
-        // Sinon, afficher les wagons
-        console.log("data :", wagonsResponse.data);
-        setWagonsData(wagonsResponse.data.chargements);
-        setCurrentInterval(`${wagonsResponse.data.current_interval.start} - ${wagonsResponse.data.current_interval.end}`);
-        setTotalCount(wagonsResponse.data.total_count || wagonsResponse.data.chargements.length);
-
-         // Après le filtrage côté client
-        let filteredWagons = wagonsResponse.data.chargements;
-        if (filters.type_wagon) {
-            filteredWagons = filteredWagons.filter(wagon =>
-                (wagon.wagon?.type_wagon || '').toLowerCase() === filters.type_wagon.toLowerCase()
-            );
-            setWagonsData(filteredWagons); 
-        setTotalCount(filteredWagons.length);
+        if (response.data.success) {
+            setSelectedWagonDetails(response.data.data);
+            setShowWagonDetailsModal(true);
         }
-        // Requête pour les trieurs nécessaires avec les MÊMES paramètres
-        const trieursResponse = await axios.get('http://localhost:8000/api/chargements/calculate-trieurs', {
-            headers: { 'Authorization': `Bearer ${token}` },
-            params: params
-        });
-        
-        setCustomTrieursNeeded({
-            ...trieursResponse.data,
-            interval: wagonsResponse.data.current_interval
-        });
+    } catch (error) {
+        console.error("Error fetching wagon details:", error);
+    }
+  };
+
+  const fetchData = async (startFromWagon = null, count = wagonCount) => {
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('token');
+      
+      const params = { 
+          id_four: id_four,
+          limit: count,
+          ...(startFromWagon && { start_from_wagon: startFromWagon })
+      };
+
+      // Requête pour les wagons
+      const wagonsResponse = await axios.get('http://localhost:8000/api/chargements/interval', {
+          headers: { 'Authorization': `Bearer ${token}` },
+          params: params
+      });
+      //console.log("Wagons Response:", wagonsResponse.data);
+      setWagonsData(wagonsResponse.data.chargements);
+      setCurrentInterval(`${wagonsResponse.data.current_interval.start} - ${wagonsResponse.data.current_interval.end}`);
+      setTotalCount(wagonsResponse.data.total_count || wagonsResponse.data.chargements.length);
+
+      // Requête pour les trieurs nécessaires avec les MÊMES paramètres
+      const trieursResponse = await axios.get('http://localhost:8000/api/chargements/calculate-trieurs', {
+          headers: { 'Authorization': `Bearer ${token}` },
+          params: params
+      });
+      //console.log("Trieurs Response:", trieursResponse.data);
+      setCustomTrieursNeeded({
+          ...trieursResponse.data,
+          interval: wagonsResponse.data.current_interval
+      });
 
     } catch (error) {
         console.error("Erreur de chargement:", error);
-        setError("Erreur lors du chargement des données");
+        //setError("Erreur lors du chargement des données");
+        setError("Il ya aucun wagon charger ou sortie dans ce shift");
         setWagonsData([]);
         setCustomTrieursNeeded(null);
     } finally {
         setLoading(false);
     }
-};
-
-    const handleSearchByWagon = () => {
-        if (wagonSearch.trim() === '') {
-            fetchData();
-        } else {
-            fetchData(wagonSearch, wagonCount);
-        }
-    };
-
-    const handleReset = () => {
-        setWagonSearch('');
-        setWagonCount(id_four === 6 ? 30 : 16);
-        fetchData();
-    };
-
-    useEffect(() => {
-        fetchData();
-        // Mettre à jour toutes les 3 heures (10800000 ms)
-        const interval = setInterval(fetchData, 10800000);
-        
-        return () => clearInterval(interval);
-    }, [fourNum , id_four, wagonCount, filters.type_wagon]);
-
-    if (loading) return (
-        <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
-            <CircularProgress />
-        </Box>
-    );
-    
-    if (error) return (
-        <Alert severity="error" sx={{ mb: 2 }}>
-            {error}
-        </Alert>
-    );
-    const handleExportCsv = () => {
-    const headers = [
-      "N° wagon",
-      "Type",
-      "Four",
-      "Pièces",
-      "Heure sortie estimée",
-      "Statut",
-    ];
-      const csvRows = wagonsData.map((wagon) => {
-      const numWagon = wagon.wagon?.num_wagon || 'N/A';
-      const typeWagon = wagon.wagon?.type_wagon || 'N/A';
-      const numFour = wagon.four?.num_four || 'N/A';
-      const pieces = wagon.details?.reduce((sum, detail) => sum + detail.quantite, 0) || 0;
-      const heureSortieEstime = wagon.datetime_sortieEstime
-        ? new Date(wagon.datetime_sortieEstime).toLocaleTimeString('fr-FR')
-        : 'N/A';
-      const statut = wagon.statut;
-
-      return [
-        `"${numWagon}"`,
-        `"${typeWagon}"`,
-        `"${numFour}"`,
-        pieces,
-        `"${heureSortieEstime}"`,
-        `"${statut}"`,
-      ].join(';');
-    });
-
-    const csvContent = [headers.join(';'), ...csvRows].join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    // link.setAttribute('download', 'wagons_export.csv');
-    const now = new Date();
-    // Date au format FR → "01/10/2025"
-    const datePart = now.toLocaleDateString('fr-FR').replace(/\//g, '-');
-    // Heure et minutes → "08-09"
-    const timePart = now
-      .toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
-      .replace(':', '-');
-    // Nom du fichier final
-    const fileName = `wagons_export_${datePart}_${timePart}.csv`;
-    link.setAttribute('download', fileName);
-
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
   };
 
-  // const handleExportPdf = () => {
-  //   window.print();
-  // };
+  const handleSearchByWagon = () => {
+      if (wagonSearch.trim() === '') {
+          fetchData();
+      } else {
+          fetchData(wagonSearch, wagonCount);
+      }
+  };
 
-    return (
-        <>
-              <TableContainer component={Paper} sx={{ mb: 4 }}>
-        <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Typography variant="subtitle1">
-              Total: {totalCount} wagons
-            </Typography>
-            <Stack direction="row" spacing={2}>
-              <Button
-                variant="outlined"
-                startIcon={<RefreshIcon />}
-                onClick={() => {
-                  setWagonSearch('');
-                  setFilters({ type_wagon: '' }); // Reset filters on refresh
-                  fetchData();
-                }}
-                size="small"
-              >
-                Actualiser
-              </Button>
-              <Button variant="contained" onClick={handleExportCsv} size="small">
-                Exporter CSV
-              </Button>
-              {/* <Button variant="contained" onClick={handleExportPdf} size="small">
-                Exporter PDF
-              </Button> */}
-            </Stack>
-          </Box>
-          <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
-            <TextField
-              label="Nombre de wagons"
-              variant="outlined"
-              size="small"
-              type="number"
-              value={wagonCount}
-              onChange={(e) => setWagonCount(Math.max(1, parseInt(e.target.value) || 1))}
-              sx={{ width: 120 }}
-              inputProps={{ min: 1 }}
-            />
-            <TextField
-              label="Rechercher à partir du wagon"
-              variant="outlined"
-              size="small"
-              value={wagonSearch}
-              onChange={(e) => setWagonSearch(e.target.value)}
-              sx={{ width: 200 }}
-              placeholder="Numéro de wagon"
-            />
+  const handleReset = () => {
+      setWagonSearch('');
+      setWagonCount(id_four === 1 ? 30 : 16);
+      fetchData();
+  };
 
-            <Button
-              variant="contained"
-              onClick={handleSearchByWagon}
-              size="small"
-            >
-              Rechercher
-            </Button>
+  useEffect(() => {
+      fetchData();
+      
+      // Mettre à jour toutes les 3 heures (10800000 ms)
+      const interval = setInterval(fetchData, 10800000);
+      
+      return () => clearInterval(interval);
+  }, [fourNum]);
 
-            <Button
-              variant="outlined"
-              onClick={handleReset}
-              size="small"
-            >
-              Réinitialiser
-            </Button>
-          </Box>
-        </Box>
-        {message && (
-          <Alert severity="warning" sx={{ mb: 2 }}>
-            {message}
-          </Alert>
-        )}
-        <Table sx={{ minWidth: 650 }} aria-label="wagon table">
-          <TableHead>
-            <TableRow>
-              <TableCell>N° wagon</TableCell>
-              <TableCell>
-                Type
-                <FormControl variant="standard" sx={{ ml: 1, minWidth: 100 }}>
-                  <Select
-                    value={filters.type_wagon || ''}
-                    onChange={(e) => handleFilterChange('type_wagon', e.target.value)}
-                    displayEmpty
-                    size="small"
-                  >
-                    <MenuItem value="">Tous</MenuItem>
-                    <MenuItem value="db">DB</MenuItem>
-                    <MenuItem value="gf">GF</MenuItem>
-                    <MenuItem value="bv">BV</MenuItem>
-                    <MenuItem value="bg">BG</MenuItem>
-                    <MenuItem value="dp">DP</MenuItem>
-                  </Select>
-                </FormControl>
-              </TableCell>
-              <TableCell>Four</TableCell>
-              <TableCell>Pièces</TableCell>
-              <TableCell>Heure sortie estimée</TableCell>
-              <TableCell>Statut</TableCell>
-              <TableCell>Actions</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {wagonsData.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={7} align="center">Aucun wagon dans cet intervalle</TableCell>
-              </TableRow>
-            ) : (
-              wagonsData.map((wagon) => (
-                <TableRow
-                  key={wagon.id}
-                  sx={{
-                    ...(selectedWagon === wagon.id && {
-                      borderLeft: '3px solid #8e44ad',
-                      borderRight: '3px solid #8e44ad',
-                      '& td': { borderBottom: '1px solid #8e44ad' }
-                    }),
-                    ...(wagon.statut === 'sorti' && { opacity: 0.7 })
-                  }}
-                >
-                  <TableCell>{wagon.wagon?.num_wagon || 'N/A'}</TableCell>
-                  <TableCell>{wagon.wagon?.type_wagon || 'N/A'}</TableCell>
-                  <TableCell>{wagon.four?.num_four || 'N/A'}</TableCell>
-                  <TableCell>
-                    {wagon.details?.reduce((sum, detail) => sum + detail.quantite, 0) || 0}
-                  </TableCell>
-                  <TableCell>
-                    {wagon.datetime_sortieEstime
-                      ? new Date(wagon.datetime_sortieEstime).toLocaleTimeString()
-                      : 'N/A'}
-                  </TableCell>
-                  <TableCell>
-                    <Chip
-                      label={wagon.statut}
-                      color={
-                        wagon.statut === 'en cours' ? 'primary' :
-                        wagon.statut === 'prêt à sortir' ? 'success' :
-                        wagon.statut === 'sorti' ? 'default' : 'warning'
-                      }
-                      size="small"
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <Button
-                      variant="contained"
-                      size="small"
-                      onClick={() => fetchWagonDetails(wagon.id)}
-                      endIcon={<ArrowRightIcon />}
-                    >
-                      Détails
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))
+  if (loading) return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+          <CircularProgress />
+      </Box>
+  );
+    
+  /*if (error) return (
+      <Alert severity="info" sx={{ mb: 2 }}>
+          {error}
+      </Alert>
+  );*/
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'en attente': return 'warning';
+      case 'en cuisson': return 'info';
+      case 'prêt à sortir': return 'success';
+      case 'sorti': return 'default';
+      default: return 'primary';
+    }
+  };
+  const columns=[
+      { field: 'wagon_num', headerName: 'N° wagon', valueGetter: params => params || 'N/A', flex: 1 },
+      { field: 'wagon_type', headerName: 'Type', valueGetter: params => params || 'N/A', flex: 1 },
+      { field: 'four_num', headerName: 'Four', valueGetter: params => params || 'N/A', flex: 1 },
+      {
+        field: 'total_pieces',
+        headerName: 'Pièces',
+        valueGetter: params =>
+          //params?.reduce((sum, detail) => sum + Number(detail.quantite), 0) || 0,
+          params || 0,
+        flex: 1
+      },
+      {
+        field: 'heure_sortie',
+        headerName: 'Heure sortie estimée',
+        valueGetter: params =>params,
+          /*console.log("date",params) 
+          params
+            ? new Date(params).toLocaleTimeString()
+            : 'N/A',*/
+        flex: 1
+      },
+      { field: 'statut', headerName: 'Statut', flex: 1,
+        renderCell: (params) => (
+        <Chip
+          label={params.row.statut}
+          color={getStatusColor(params.row.statut)}
+          size="small"
+        />
+      )
+       },
+       {
+        field: 'actions',
+        headerName: 'Actions',
+        flex: 1,
+        sortable: false,
+        filterable: false,
+        renderCell: (params) => (
+          <Button
+            variant="outlined"
+            size="small"
+            onClick={() => fetchWagonDetails(params.row.id)}
+          >
+            Détails
+          </Button>
+        )
+       }
+    ]
+
+  return (
+      <>
+          <TableContainer component={Paper} sx={{ mb: 4 }}>
+              <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Typography variant="subtitle1">
+                          Total: {totalCount} wagons 
+                      </Typography>
+                      <Button 
+                          variant="outlined" 
+                          startIcon={<RefreshIcon />}
+                          onClick={() => {
+                              setWagonSearch('');
+                              fetchData();
+                          }}
+                          size="small"
+                      >
+                          Actualiser
+                      </Button>
+                  </Box>
+
+                  <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
+                      <TextField
+                          label="Nombre de wagons"
+                          variant="outlined"
+                          size="small"
+                          type="number"
+                          value={wagonCount}
+                          onChange={(e) => setWagonCount(Math.max(1, parseInt(e.target.value) || 1))}
+                          sx={{ width: 120 }}
+                          inputProps={{ min: 1 }}
+                      />
+                      
+                      <TextField
+                          label="Rechercher à partir du wagon..."
+                          variant="outlined"
+                          size="small"
+                          value={wagonSearch}
+                          onChange={(e) => setWagonSearch(e.target.value)}
+                          sx={{ width: 200 }}
+                          placeholder="Numéro de wagon"
+                      />
+                      
+                      <Button 
+                          variant="contained" 
+                          onClick={handleSearchByWagon}
+                          size="small"
+                      >
+                          Rechercher
+                      </Button>
+                      
+                      <Button 
+                          variant="outlined" 
+                          onClick={handleReset}
+                          size="small"
+                      >
+                          Réinitialiser
+                      </Button>
+                  </Box>
+              </Box>
+              
+              <DataGrid
+                  rows={wagonsData}
+                  columns={columns}
+                  getRowId={(row) => row.id}
+                  localeText={frFR.components.MuiDataGrid.defaultProps.localeText}
+                  components={{ Toolbar: CustomToolbar }}
+                  autoHeight
+                  showToolbar
+                />
+
+            {customTrieursNeeded && (
+              <Box sx={{ p: 2, mt: 2, backgroundColor: '#f5f5f5', borderRadius: 1 }}>
+                  <Typography variant="subtitle1" sx={{ mb: 1 }}>
+                      Besoins en trieurs pour {wagonsData.length} wagons affichés:
+                  </Typography>
+                  <FourTrieursNeeded 
+                      data={id_four === 1 ? customTrieursNeeded.f3 : customTrieursNeeded.f4} 
+                      four={fourNum} 
+                      fullWidth 
+                  />
+              </Box>
             )}
-          </TableBody>
-        </Table>
+          </TableContainer>
 
-        {customTrieursNeeded && wagonsData.length > 0 &&  (
-          <Box sx={{ p: 2, mt: 2, backgroundColor: '#f5f5f5', borderRadius: 1 }}>
-            <Typography variant="subtitle1" sx={{ mb: 1 }}>
-              Besoins en trieurs pour {wagonsData.length} wagons affichés:
-            </Typography>
-            <FourTrieursNeeded
-              data={id_four === 6 ? customTrieursNeeded.f3 : customTrieursNeeded.f4}
-              four={fourNum}
-              fullWidth
-            />
-          </Box>
-        )}
-      </TableContainer>
+          {/* Modal pour les détails du wagon */}
+          <Modal open={showWagonDetailsModal} onClose={() => setShowWagonDetailsModal(false)}>
+            <Box sx={{
+                position: 'absolute',
+                top: '50%',
+                left: '50%',
+                transform: 'translate(-50%, -50%)',
+                width: 600,
+                bgcolor: 'background.paper',
+                boxShadow: 24,
+                p: 4,
+                borderRadius: 2
+            }}>
+            {selectedWagonDetails && (
+            <>
+              <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
+                  <Typography variant="h6">Détails du Wagon #{selectedWagonDetails.wagon_num}</Typography>
+                  <IconButton onClick={() => setShowWagonDetailsModal(false)}>
+                      <CloseIcon />
+                  </IconButton>
+              </Box>
 
-            {/* Modal pour les détails du wagon */}
-            <Modal open={showWagonDetailsModal} onClose={() => setShowWagonDetailsModal(false)}>
-                <Box sx={{
-                    position: 'absolute',
-                    top: '50%',
-                    left: '50%',
-                    transform: 'translate(-50%, -50%)',
-                    width: 600,
-                    bgcolor: 'background.paper',
-                    boxShadow: 24,
-                    p: 4,
-                    borderRadius: 2
-                }}>
-                    {selectedWagonDetails  &&  (
-                        <>
-                            <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
-                                <Typography variant="h6">Détails du Wagon #{selectedWagonDetails.wagon_num}</Typography>
-                                <IconButton onClick={() => setShowWagonDetailsModal(false)}>
-                                    <CloseIcon />
-                                </IconButton>
-                            </Box>
+              <Grid container spacing={2} sx={{ mb: 2 }}>
+                  <Grid item xs={6}>
+                      <Typography variant="subtitle2">Type:</Typography>
+                      <Typography>{selectedWagonDetails.wagon_type}</Typography>
+                  </Grid>
+                  <Grid item xs={6}>
+                      <Typography variant="subtitle2">Four:</Typography>
+                      <Typography>{selectedWagonDetails.four_num}</Typography>
+                  </Grid>
+                  <Grid item xs={6}>
+                      <Typography variant="subtitle2">Statut:</Typography>
+                      <Typography>{selectedWagonDetails.statut}</Typography>
+                  </Grid>
+                  <Grid item xs={6}>
+                      <Typography variant="subtitle2">Date Chargement:</Typography>
+                      <Typography>
+                          {new Date(selectedWagonDetails.datetime_chargement).toLocaleString()}
+                      </Typography>
+                  </Grid>
+                  <Grid item xs={6}>
+                      <Typography variant="subtitle2">Date sorti estimée:</Typography>
+                      <Typography>
+                          {new Date(selectedWagonDetails.heure_sortie_estimee).toLocaleString()}
+                      </Typography>
+                  </Grid>
+              </Grid>
 
-                            <Grid container spacing={2} sx={{ mb: 2 }}>
-                                <Grid item xs={6}>
-                                    <Typography variant="subtitle2">Type:</Typography>
-                                    <Typography>{selectedWagonDetails.wagon_type}</Typography>
-                                </Grid>
-                                <Grid item xs={6}>
-                                    <Typography variant="subtitle2">Four:</Typography>
-                                    <Typography>{selectedWagonDetails.four_num}</Typography>
-                                </Grid>
-                                <Grid item xs={6}>
-                                    <Typography variant="subtitle2">Date Chargement:</Typography>
-                                    <Typography>
-                                        {new Date(selectedWagonDetails.datetime_chargement).toLocaleString()}
-                                    </Typography>
-                                </Grid>
-                                <Grid item xs={6}>
-                                    <Typography variant="subtitle2">Statut:</Typography>
-                                    <Typography>{selectedWagonDetails.statut}</Typography>
-                                </Grid>
-                            </Grid>
+              <Divider sx={{ my: 2 }} />
 
-                            <Divider sx={{ my: 2 }} />
-
-                            <Typography variant="h6" gutterBottom>Pièces Chargées</Typography>
-                            <TableContainer component={Paper}>
-                                <Table size="small">
-                                    <TableHead>
-                                        <TableRow>
-                                            <TableCell>Famille</TableCell>
-                                            <TableCell align="right">Quantité</TableCell>
-                                        </TableRow>
-                                    </TableHead>
-                                    <TableBody>
-                                        {selectedWagonDetails.details.map((detail, index) => (
-                                            <TableRow key={index}>
-                                                <TableCell>{detail.nom_famille}</TableCell>
-                                                <TableCell align="right">{detail.quantite}</TableCell>
-                                            </TableRow>
-                                        ))}
-                                    </TableBody>
-                                </Table>
-                            </TableContainer>
-                        </>
-                    )}
-                </Box>
-            </Modal>
-        </>
-    );
+              <Typography variant="h6" gutterBottom>Pièces Chargées</Typography>
+              <TableContainer component={Paper}>
+                  <Table size="small">
+                      <TableHead>
+                          <TableRow>
+                              <TableCell>Famille</TableCell>
+                              <TableCell align="right">Quantité</TableCell>
+                          </TableRow>
+                      </TableHead>
+                      <TableBody>
+                          {selectedWagonDetails.details.map((detail, index) => (
+                              <TableRow key={index}>
+                                  <TableCell>{detail.nom_famille}</TableCell>
+                                  <TableCell align="right">{detail.quantite}</TableCell>
+                              </TableRow>
+                          ))}
+                      </TableBody>
+                  </Table>
+              </TableContainer>
+            </>
+            )}
+            </Box>
+          </Modal>
+      </>
+  );
 };
 // Component: TrieursTable
 const TrieursTable = () => {
@@ -1954,7 +1885,6 @@ const TrieursTable = () => {
   const [familles, setFamilles] = useState([]); // Nouvel état pour les familles
   const [selectedFamilles, setSelectedFamilles] = useState([]); // Familles sélectionnées
   const [submitting, setSubmitting] = useState(false);
-  const navigate = useNavigate();
   const [newTrieur, setNewTrieur] = useState({
     matricule: '',
     nom: '',
@@ -1987,9 +1917,6 @@ const handleDelete = async (userId) => {
     }
   }
 };
-const handleEdit = (userId) => {
-    navigate(`/manage-users/edit/${userId}`);
-  };
 
   // Charger les familles disponibles
   const fetchFamilles = async () => {
@@ -2094,6 +2021,7 @@ const fetchTrieurs = async () => {
       typeof value === 'string' ? value.split(',') : value,
     );
   };
+
   if (loading) return <Typography>Chargement en cours...</Typography>;
   if (error) return <Typography color="error">{error}</Typography>;
 
@@ -2222,9 +2150,9 @@ const fetchTrieurs = async () => {
   ) : (
     filteredTrieurs.map((trieur) => (
       <TableRow key={trieur.id_user}>
-        <TableCell>{trieur.matricule}</TableCell>
-        <TableCell>{trieur.nom}</TableCell>
-        <TableCell>{trieur.prenom}</TableCell>
+        <TableCell>{trieur.matricule.toUpperCase()}</TableCell>
+        <TableCell>{trieur.nom.toUpperCase()}</TableCell>
+        <TableCell>{trieur.prenom.toUpperCase()}</TableCell>
         <TableCell>
           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
             {trieur.polyvalences?.map(poly => (
@@ -2260,12 +2188,6 @@ const fetchTrieurs = async () => {
       onClick={() => handleDelete(trieur.id_user)}
     >
       <DeleteIcon />
-    </IconButton>
-    <IconButton 
-    color="primary"
-    onClick={() => handleEdit(trieur.id_user)}
-    >
-    <EditIcon />
     </IconButton>
   </TableCell>
 </TableRow>
@@ -2358,8 +2280,8 @@ const WagonsTabs = () => {
         {activeTab === 'f3'}
       </Box>
 
-      {activeTab === 'f3' && <WagonTable fourNum="F3" id_four={6} />}
-      {activeTab === 'f4' && <WagonTable fourNum="F4" id_four={7} />}
+      {activeTab === 'f3' && <WagonTable fourNum="F3" id_four={1} />}
+      {activeTab === 'f4' && <WagonTable fourNum="F4" id_four={2} />}
     </Box>
   );
 };
@@ -2473,11 +2395,11 @@ const DashboardContent = () => {
       const [f3Response, f4Response] = await Promise.all([
         axios.get('http://localhost:8000/api/chargements/interval', {
           headers: { 'Authorization': `Bearer ${token}` },
-          params: { id_four: 6 }
+          params: { id_four: 1 }
         }),
         axios.get('http://localhost:8000/api/chargements/interval', {
           headers: { 'Authorization': `Bearer ${token}` },
-          params: { id_four: 7 }
+          params: { id_four: 2 }
         })
       ]);
 
@@ -2665,7 +2587,6 @@ const TeamContent = ({ subSection }) => {
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [openModal, setOpenModal] = useState(false);
-  const navigate = useNavigate();
   const [newEnfourneur, setNewEnfourneur] = useState({
     matricule: '',
     nom: '',
@@ -2717,10 +2638,7 @@ const TeamContent = ({ subSection }) => {
       }
     }
   };
-const handleEdit = (userId) => {
-  navigate(`/manage-users/edit/${userId}`);
-};
-  // ...le reste de ton composant
+
   // Fonction pour ajouter un enfourneur
   const handleAddEnfourneur = async () => {
     setSubmitting(true);
@@ -2858,9 +2776,9 @@ const handleEdit = (userId) => {
             ) : (
               filteredEnfourneurs.map((enfourneur) => (
                 <TableRow key={enfourneur.id_user}>
-                  <TableCell>{enfourneur.matricule}</TableCell>
-                  <TableCell>{enfourneur.nom}</TableCell>
-                  <TableCell>{enfourneur.prenom}</TableCell>
+                  <TableCell>{enfourneur.matricule.toUpperCase()}</TableCell>
+                  <TableCell>{enfourneur.nom.toUpperCase()}</TableCell>
+                  <TableCell>{enfourneur.prenom.toUpperCase()}</TableCell>
                   <TableCell>
                     <Chip
                       label={enfourneur.is_active ? 'Actif' : 'Inactif'}
@@ -2880,12 +2798,6 @@ const handleEdit = (userId) => {
                       onClick={() => handleDelete(enfourneur.id_user)}
                     >
                       <DeleteIcon />
-                    </IconButton>
-                    <IconButton 
-                      color="primary"
-                      onClick={() => handleEdit(enfourneur.id_user)}
-                    >
-                      <EditIcon />
                     </IconButton>
                   </TableCell>
                 </TableRow>
@@ -2988,6 +2900,11 @@ function ChefDashboard() {
             <CssBaseline />
             <AppProvider
                 navigation={NAVIGATION}
+                branding={{
+                  //logo: <img src={eKilnLogo} alt="eKiln logo" />,
+                  title: 'eKiln',
+                  homeUrl: '/chedDashboard',
+                }}
                 router={router}
                 theme={theme}
             >

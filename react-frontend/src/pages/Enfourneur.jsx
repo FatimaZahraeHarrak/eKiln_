@@ -55,12 +55,13 @@ function Enfourneur() {
   const [chargementCount, setChargementCount] = useState(0); // Nouvel état pour le nombre de chargements
   const wagonRef = useRef(null);
   const messageRef = useRef(null);
-  const [_isEditing, setIsEditing] = useState({});
+  const [user, setUser] = useState(null);
+
   useEffect(() => {
     const fetchInitialData = async () => {
       try {
         const token = localStorage.getItem("token");
-        const [famillesRes, foursRes, wagonsRes] = await Promise.all([
+        const [famillesRes, foursRes, wagonsRes, userRes] = await Promise.all([
           axios.get("http://localhost:8000/api/familles", {
             headers: { Authorization: `Bearer ${token}` },
           }),
@@ -70,11 +71,15 @@ function Enfourneur() {
           axios.get("http://localhost:8000/api/wagons1", {
             headers: { Authorization: `Bearer ${token}` },
           }),
+          axios.get("http://localhost:8000/api/me", {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
         ]);
 
         setFamilles(famillesRes.data);
         setFours(foursRes.data);
         setWAgons(wagonsRes.data.data);
+        setUser(userRes.data);
 
         const initialQuantites = {};
         famillesRes.data.forEach(famille => {
@@ -138,7 +143,7 @@ function Enfourneur() {
         await axios.post("http://localhost:8000/api/chargements", chargementData, {
             headers: { Authorization: `Bearer ${token}`, 'Accept': 'application/json' },
         });
-    // Mettre à jour les chargements et compteur
+ // Mettre à jour les chargements et compteur
      fetchChargements(false);
     // Afficher le message
     setError({ severity: "success", message: "Chargement enregistré avec succès!" });
@@ -200,7 +205,7 @@ function Enfourneur() {
 
     const totalPieces = chargements.reduce((sum, chargement) => {
       return sum + (chargement.details
-        ? chargement.details.reduce((detSum, detail) => detSum + detail.quantite, 0)
+        ? chargement.details.reduce((detSum, detail) => detSum + Number(detail.quantite), 0)
         : 0);
     }, 0);
 
@@ -252,20 +257,21 @@ useEffect(() => {
       }
     }
   };
-const fourRef = useRef(null);
-const [fourOpen, setFourOpen] = useState(false);
+  const fourRef = useRef(null);
+  const [fourOpen, setFourOpen] = useState(false);
 
-// Ref pour savoir si le menu a déjà été ouvert une fois
-const hasOpenedFourOnce = useRef(false);
+  // Ref pour savoir si le menu a déjà été ouvert une fois
+  const hasOpenedFourOnce = useRef(false);
 
-// Quand le wagon change → focus + ouvrir le menu **une seule fois**
-useEffect(() => {
-  if (selectedWagon && fourRef.current && !hasOpenedFourOnce.current) {
-    fourRef.current.focus();       // focus visible
-    setFourOpen(true);             // ouvre le menu
-    hasOpenedFourOnce.current = true; // on ne le refait plus
-  }
-}, [selectedWagon]);
+  // Quand le wagon change → focus + ouvrir le menu **une seule fois**
+  useEffect(() => {
+    if (selectedWagon && fourRef.current && !hasOpenedFourOnce.current) {
+      fourRef.current.focus();       // focus visible
+      setFourOpen(true);             // ouvre le menu
+      hasOpenedFourOnce.current = true; // on ne le refait plus
+    }
+  }, [selectedWagon]);
+
   const handleLogout = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("user");
@@ -368,10 +374,10 @@ useEffect(() => {
             <Box component="form" onSubmit={handleSubmit} noValidate>
              <Grid container spacing={3}>
                 {/* Wagon Autocomplete */}
-                <Grid item xs={12} md={6} width="240px">
+                <Grid item xs={12} md={6} width="180px">
                   <Autocomplete
                     options={wagons}
-                    getOptionLabel={(wagon) => `${wagon.num_wagon} - Statut: ${wagon.statut}`}
+                    getOptionLabel={(wagon) => `Wagon : ${wagon.num_wagon}`}
                     value={wagons.find(w => w.id_wagon === selectedWagon) || null}
                     onChange={(event, newValue) => {
                       setSelectedWagon(newValue ? newValue.id_wagon : '');
@@ -408,10 +414,10 @@ useEffect(() => {
                       }}
                       sx={{ '& .MuiSelect-select': { width: '140px' } }}
                     >
-                      {/* <MenuItem value="">
+                      <MenuItem value="">
                         <em>Sélectionnez un four</em>
-                      </MenuItem> */}
-                      {fours?.map((four) => (
+                      </MenuItem>
+                      {fours.map((four) => (
                         <MenuItem key={four.id_four} value={four.id_four}>
                           {four.num_four} - Cadence: {four.cadence}
                         </MenuItem>
@@ -425,10 +431,11 @@ useEffect(() => {
                   <Grid item xs={12} md={4}>
                     <Paper elevation={3} sx={{ p: 2, textAlign: 'center' }}>
                       <Typography variant="h6" gutterBottom>
-                        Title 1
+                        {user?.matricule ?? "N/A"}
                       </Typography>
+
                       <Typography variant="subtitle2" color="text.secondary">
-                        Nom
+                        {user?.nom ?? "N/A"} {user?.prenom ?? "N/A"}
                       </Typography>
                     </Paper>
                   </Grid>
@@ -439,7 +446,7 @@ useEffect(() => {
                         {totalPieces}
                       </Typography>
                       <Typography variant="subtitle2" color="text.secondary">
-                        Pièces
+                        Les Pièces
                       </Typography>
                     </Paper>
                   </Grid>
@@ -454,13 +461,14 @@ useEffect(() => {
                       </Typography>
                     </Paper>
                   </Grid>
+                  
                   <Grid item xs={12} md={4}>
                     <Paper elevation={3} sx={{ p: 2, textAlign: 'center' }}>
                       <Typography variant="h6" gutterBottom>
-                     {(totalPieces / chargementCount).toFixed(2)} 
+                     {chargementCount==0 ? 0 : (totalPieces / chargementCount).toFixed(2)} 
                       </Typography>
                       <Typography variant="subtitle2" color="text.secondary">
-                        densite
+                        Densite
                       </Typography>
                     </Paper>
                   </Grid>
@@ -629,8 +637,8 @@ useEffect(() => {
                       })()}
                     </TableBody>
                   </Table>
-               </TableContainer>
-               
+              </TableContainer>
+
               <Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end' }}>
                 <Button
                   type="submit"
@@ -681,21 +689,27 @@ useEffect(() => {
               <Grid container spacing={2} sx={{ mb: 2 }}>
                 <Grid item xs={6}>
                   <Typography variant="subtitle2">Wagon:</Typography>
-                  <Typography variant="body1">{selectedChargement.id_wagon}</Typography>
+                  <Typography variant="body1">{selectedChargement.wagon?.num_wagon}</Typography>
                 </Grid>
                 <Grid item xs={6}>
                   <Typography variant="subtitle2">Four:</Typography>
                   <Typography variant="body1">{selectedChargement.four?.num_four}</Typography>
                 </Grid>
                 <Grid item xs={6}>
-                  <Typography variant="subtitle2">Date:</Typography>
+                  <Typography variant="subtitle2">Statut:</Typography>
+                  <Typography variant="body1">{selectedChargement.statut}</Typography>
+                </Grid>
+                <Grid item xs={6}>
+                  <Typography variant="subtitle2">Date chargement:</Typography>
                   <Typography variant="body1">
                     {new Date(selectedChargement.datetime_chargement).toLocaleString()}
                   </Typography>
                 </Grid>
                 <Grid item xs={6}>
-                  <Typography variant="subtitle2">Statut:</Typography>
-                  <Typography variant="body1">{selectedChargement.statut}</Typography>
+                  <Typography variant="subtitle2">Date sorti estimée:</Typography>
+                  <Typography variant="body1">
+                    {new Date(selectedChargement.datetime_sortieEstime).toLocaleString()}
+                  </Typography>
                 </Grid>
               </Grid>
               

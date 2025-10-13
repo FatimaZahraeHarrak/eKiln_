@@ -15,7 +15,7 @@ return [
     |
     */
 
-    'default' => env('DB_CONNECTION', 'mysql'),
+    'default' => env('DB_CONNECTION', 'sqlsrv'),
 
     /*
     |--------------------------------------------------------------------------
@@ -81,11 +81,11 @@ return [
         'sqlsrv' => [
             'driver' => 'sqlsrv',
             'url' => env('DATABASE_URL'),
-            'host' => env('DB_HOST', 'mataw002\sqlexpress'),
+            'host' => env('DB_HOST', 'az-emea-test-ekiln-sql.database.windows.net'),
             'port' => env('DB_PORT', '1433'),
-            'database' => env('DB_DATABASE', 'GS_Wagon'),
-            'username' => env('DB_USERNAME', 'sa'),
-            'password' => env('DB_PASSWORD', 'SAm@t@2013'),
+            'database' => env('DB_DATABASE', 'az-emea-test-ekiln-sqldb'),
+            'username' => env('DB_USERNAME', 'ekilnAdmin'),
+            'password' => env('DB_PASSWORD', 'ekiln@12345'),
             'charset' => 'utf8',
             'prefix' => '',
             'prefix_indexes' => true,

@@ -21,10 +21,6 @@ import { AuthProvider } from './context/AuthContext';
 import Familles from './pages/Familles';
 import FamilleEdit from './pages/FamilleEdit';
 import FamilleAdd from './pages/FamilleAdd';
-import WagonsOverview from './pages/WagonsOverview';
-import HistoriqueAdemin from './pages/HistoriqueAdemin';
-import ArchivesChargements from './pages/ArchivesChargements';
-
 
 function App() {
   return (
@@ -35,7 +31,7 @@ function App() {
         <Route path="/users" element={<UserManagement />} />
         <Route path="/Enfourneur" element={<Enfourneur />} />
         <Route path="/ChefDashboard" element={<ChefDashboard />} />
-        <Route path="/logout" element={<Logout />} />
+<Route path="/logout" element={<Logout />} />
         <Route path="/manage-users" element={<ManageUsers />} />
         <Route path="/manage-users/add" element={<ManageUsersAdd />} />
         <Route path="/manage-users/edit/:id" element={<ManageUsersEdit />} />
@@ -45,11 +41,8 @@ function App() {
         <Route path="/settings/wagons/edit/:id" element={<WagonEdit />} />
         <Route path="/wagon_visualization" element={<Wagon_Visualization />} />
         <Route path="/history" element={<History />} />
-        <Route path="/historique-chargement" element={<HistoriqueAdemin />} />
-        <Route path="/archives-chargements" element={<ArchivesChargements />} />
         <Route path="/selection" element={<Selection />} />
         <Route path="/recap" element={<Recap />} />
-         <Route path="/wagons-overview" element={<WagonsOverview />} />
         <Route path="*" element={<Navigate to="/dashboard" />} />
         <Route path="/settings/familles" element={<Familles />} />
         <Route path="/settings/familles/add" element={<FamilleAdd />} />

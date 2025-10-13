@@ -28,9 +28,12 @@ const TotalPiecesChart = () => {
         setError(null);
         const startTime = Date.now();
 
+        const token = localStorage.getItem('token');
         const response = await axios.get('http://localhost:8000/api/total-pieces-by-day', {
+
           cancelToken: source.token,
           headers: {
+            Authorization: `Bearer ${token}`,
             'Cache-Control': 'no-cache',
             'Pragma': 'no-cache'
           },

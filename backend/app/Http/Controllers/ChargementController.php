@@ -34,12 +34,12 @@ class ChargementController extends Controller
 
     // Vérifier le statut du wagon
     $wagon = Wagon::find($request->id_wagon);
-    if ($wagon->statut !== 'Disponible' && $wagon->statut !== 'disponible') {
+    /*if ($wagon->statut !== 'Disponible' && $wagon->statut !== 'disponible') {
         return response()->json([
             'message' => 'Ce wagon n\'est pas disponible pour le chargement',
             'statut_wagon' => $wagon->statut
         ], 422);
-    }
+    }*/
 
     // Créer le chargement
     $chargement = Chargement::create([
@@ -104,6 +104,7 @@ public function mesChargements() {
         return $c->details->sum('quantite');
     });
     $chargementCount = $chargements->count();
+
     // Stocker les totaux dans la session
     session([
         'total_pieces' => $totalPieces,
@@ -172,7 +173,7 @@ public function getActiveByFour()
     try {
         // Récupérer les chargements actifs pour le four 3
         $f3 = Chargement::with(['wagon', 'four'])
-            ->where('id_four', 6)
+            ->where('id_four', 1)
             ->whereIn('statut', ['en attente', 'en cuisson', 'prêt à sortir'])
             ->orderBy('datetime_sortieEstime', 'asc')
             ->get()
@@ -189,7 +190,7 @@ public function getActiveByFour()
 
         // Récupérer les chargements actifs pour le four 4
         $f4 = Chargement::with(['wagon', 'four'])
-            ->where('id_four', 7)
+            ->where('id_four', 2)
             ->whereIn('statut', ['en attente', 'en cuisson', 'prêt à sortir'])
             ->orderBy('datetime_sortieEstime', 'asc')
             ->get()
@@ -253,9 +254,9 @@ public function getTotalPiecesByDay()
 {
     try {
         // Obtenir la date d'il y a 7 jours
-        $oneWeekAgo = Carbon::now()->subDays(7)->startOfDay();
+        $oneWeekAgo = Carbon::now()->subDays(6)->startOfDay();
 
-        /*$results = DetailChargement::join('chargements', 'detail_chargements.id_chargement', '=', 'chargements.id')
+        $results = DetailChargement::join('chargements', 'detail_chargements.id_chargement', '=', 'chargements.id')
             ->select(
                 DB::raw('DATEPART(WEEKDAY, chargements.datetime_chargement) as day_index'),
                 DB::raw("FORMAT(chargements.datetime_chargement, 'dddd') as day_name"),
@@ -268,8 +269,8 @@ public function getTotalPiecesByDay()
                 DB::raw("FORMAT(chargements.datetime_chargement, 'dddd')")
             )
             ->orderBy(DB::raw('DATEPART(WEEKDAY, chargements.datetime_chargement)'))
-            ->get();*/
-        $results = DetailChargement::join('chargements', 'detail_chargements.id_chargement', '=', 'chargements.id')
+            ->get();
+        /*$results = DetailChargement::join('chargements', 'detail_chargements.id_chargement', '=', 'chargements.id')
             ->select(
                 DB::raw('DAYOFWEEK(chargements.datetime_chargement) as day_index'),
                 DB::raw('DAYNAME(chargements.datetime_chargement) as day_name'),
@@ -279,7 +280,7 @@ public function getTotalPiecesByDay()
             ->whereNotNull('chargements.datetime_chargement')
             ->groupBy('day_index', 'day_name')
             ->orderBy('day_index')
-            ->get();
+            ->get();*/
 
         // Mapper les jours de la semaine dans l'ordre
         $daysOrder = [
@@ -339,7 +340,7 @@ public function getActiveChargementsWithCache()
 
         // Get fresh data
         $f3 = Chargement::with(['wagon', 'four'])
-            ->where('id_four', 6)
+            ->where('id_four', 1)
             ->whereIn('statut', ['en attente', 'en cuisson', 'prêt à sortir'])
             ->orderBy('datetime_sortieEstime', 'asc')
             ->get()
@@ -355,7 +356,7 @@ public function getActiveChargementsWithCache()
             });
 
         $f4 = Chargement::with(['wagon', 'four'])
-            ->where('id_four', 7)
+            ->where('id_four', 2)
             ->whereIn('statut', ['en attente', 'en cuisson', 'prêt à sortir'])
             ->orderBy('datetime_sortieEstime', 'asc')
             ->get()
@@ -470,11 +471,14 @@ public function getHistorique(Request $request)
         $search = $request->input('search', '');
         $dateFrom = $request->input('date_from');
         $dateTo = $request->input('date_to');
-        // Filtres par colonne
+        $datetime_sortieFrom = $request->input('datetime_sortie_from');
+        $datetime_sortieTo = $request->input('datetime_sortie_to');
+ // Filtres par colonne
         $wagon = $request->input('wagon');
         $four = $request->input('four');
         $pieces = $request->input('pieces'); // nombre total ou quantité d'une pièce
         $statut = $request->input('statut');
+        // $datetime_sortieEstime = $request->input('datetime_sortieEstime');
         $matricule = $request->input('matricule');
         $shift = $request->input('shift'); // 1, 2 ou 3
         // Tri dynamique
@@ -482,23 +486,31 @@ public function getHistorique(Request $request)
         $sortOrder = $request->input('sort_order', 'desc'); // 'asc' ou 'desc', par défaut 'desc'
 
         $query = Chargement::with(['user', 'wagon', 'four', 'details.famille'])
-            ->withSum('details as total_pieces', 'quantite');
+            ->withSum('details as total_pieces', 'quantite'); // <-- calcule total des pièces
+            //->orderBy('chargements.datetime_chargement', 'desc')
 
         // Filtre shift
         if ($shift) {
             $query->whereRaw('(CASE 
-                WHEN TIME(datetime_chargement) BETWEEN "06:00:00" AND "13:59:59" THEN 1
-                WHEN TIME(datetime_chargement) BETWEEN "14:00:00" AND "21:59:59" THEN 2
+                WHEN CAST(chargements.datetime_chargement AS TIME) BETWEEN \'06:00:00\' AND \'13:59:59\' THEN 1
+                WHEN CAST(chargements.datetime_chargement AS TIME) BETWEEN \'14:00:00\' AND \'21:59:59\' THEN 2
                 ELSE 3
             END) = ?', [$shift]);
         }
+
         $query->selectRaw('chargements.*,
             CASE 
-                WHEN TIME(datetime_chargement) BETWEEN "06:00:00" AND "13:59:59" THEN 1
-                WHEN TIME(datetime_chargement) BETWEEN "14:00:00" AND "21:59:59" THEN 2
+                WHEN CAST(chargements.datetime_chargement AS TIME) BETWEEN \'06:00:00\' AND \'13:59:59\' THEN 1
+                WHEN CAST(chargements.datetime_chargement AS TIME) BETWEEN \'14:00:00\' AND \'21:59:59\' THEN 2
                 ELSE 3
             END as shift
         ');
+
+        // Filtre par utilisateur si ce n'est pas un admin
+        // Vérifier si l'utilisateur est admin (remplacer selon votre logique d'admin)
+        //if (!($user->role === 'admin')) { // Remplacez 'role' par le champ réel de votre modèle User
+          //  $query->where('id_user', $user->id_user);
+        //}
 
         // Filtre de recherche
         if ($search) {
@@ -513,14 +525,13 @@ public function getHistorique(Request $request)
             });
         }
 
-         // Filtre par date
+        // Filtre par date
         if ($dateFrom) {
             $query->whereDate('datetime_chargement', '>=', $dateFrom);
         }
         if ($dateTo) {
             $query->whereDate('datetime_chargement', '<=', $dateTo);
         }
-
         // Filtres par colonne
         if ($wagon) {
             $query->whereHas('wagon', fn($q) => $q->where('num_wagon', 'like', "%{$wagon}%"));
@@ -534,10 +545,9 @@ public function getHistorique(Request $request)
         if ($matricule) {
             $query->whereHas('user', fn($q) =>
                 $q->where('matricule', 'like', "%{$matricule}%")
+                //  ->orWhere('prenom', 'like', "%{$utilisateur}%")
             );
         }
-
-        // Filtre pièces
         if ($pieces) {
             $query->whereHas('details', function($q) use ($pieces) {
                 $q->select(DB::raw('SUM(quantite) as total'))
@@ -545,8 +555,13 @@ public function getHistorique(Request $request)
                   ->havingRaw('SUM(quantite) = ?', [$pieces]);
             });
         }
+        // Tri dynamique : si sortField fourni, on trie, sinon ordre par défaut
+        if ($sortField) {
+            $query->orderBy($sortField, $sortOrder);
+        } else {
+            $query->orderBy('chargements.datetime_chargement', 'desc');
+        }
 
-        // Filtres par date sortie estimée / date chargement exacte
         if ($request->input('datetime_sortieEstime')) {
             $query->whereDate('datetime_sortieEstime', '=', $request->input('datetime_sortieEstime'));
         }
@@ -554,14 +569,8 @@ public function getHistorique(Request $request)
             $query->whereDate('datetime_chargement', '=', $request->input('datetime_chargement'));
         }
 
-        // Tri dynamique : si sortField fourni, on trie, sinon ordre par défaut
-        if ($sortField) {
-            $query->orderBy($sortField, $sortOrder);
-        } else {
-            $query->orderBy('datetime_chargement', 'desc');
-        }
-
         $chargements = $query->paginate($perPage);
+
         return response()->json([
             'success' => true,
             'data' => $chargements,
@@ -597,9 +606,9 @@ public function getPopupDetails($id)
                 'wagon_type' => $chargement->wagon->type_wagon ?? 'N/A',
                 'four_num' => $chargement->four->num_four ?? 'N/A',
                 'total_pieces' => $chargement->details->sum('quantite'),
-                'heure_sortie_estimee' => $chargement->datetime_sortieEstime
-                    ? Carbon::parse($chargement->datetime_sortieEstime)->format('Y-m-d H:i:s')
-                    : 'N/A',
+                'heure_sortie_estimee' => $chargement->datetime_sortieEstime,
+                    //? Carbon::parse($chargement->datetime_sortieEstime)->format('Y-m-d H:i:s')
+                    //: 'N/A',
                 'datetime_chargement' => $chargement->datetime_chargement,
                 'statut' => $chargement->statut,
                 'details' => $chargement->details->map(function($detail) {
@@ -623,6 +632,79 @@ public function getPopupDetails($id)
         ], 404);
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     public function getProchainsChargements(Request $request)
     {
         try {
@@ -630,7 +712,7 @@ public function getPopupDetails($id)
             $currentHour = $now->hour;
 
             // Définir les intervalles selon la nouvelle logique
-            if ($currentHour >= 6 && $currentHour < 14) {
+            if ($currentHour >= 5 && $currentHour < 14) {
                 $start = $now->copy()->setTime(6, 0, 0);
                 $end = $now->copy()->setTime(14, 0, 0);
             } elseif ($currentHour >= 14 && $currentHour < 22) {
@@ -679,7 +761,7 @@ public function getPopupDetails($id)
     {
         $user = Auth::user();
 
-        $chargement = Chargement::with(['four','user', 'details.famille'])
+        $chargement = Chargement::with(['four','user','wagon', 'details.famille'])
             ->where('id_user', $user->id_user)
             ->where('id', $id)
             ->firstOrFail();
@@ -687,7 +769,7 @@ public function getPopupDetails($id)
         return response()->json($chargement);
     }
 
-   public function getChargementsActifs()
+    public function getChargementsActifs()
     {
         $now = now();
         $currentHour = $now->hour;
@@ -710,82 +792,66 @@ public function getPopupDetails($id)
                 $end = $now->copy()->setTime(6, 0, 0);
             }
         }
-        $id_four = request()->input('id_four'); // récupéré avant
+
         $query = Chargement::with(['wagon', 'four', 'details'])
             ->whereIn('statut', ['en attente', 'en cuisson', 'prêt à sortir','sorti'])
             ->orderBy('datetime_sortieEstime', 'asc');
+
         if ($startFromWagon) {
             $lastWagonChargement = Chargement::whereHas('wagon', function($q) use ($startFromWagon) {
                 $q->where('num_wagon', $startFromWagon);
             })
             ->orderBy('datetime_sortieEstime', 'desc')
             ->first();
-        if ($lastWagonChargement) {
-        // Vérifier si le wagon est dans le shift
-        if ($lastWagonChargement->datetime_sortieEstime < $start || $lastWagonChargement->datetime_sortieEstime > $end) {
-            return response()->json([
-                'message' => "⚠️ Le wagon {$startFromWagon} n'est pas prévu de sortir sur ce shift ({$start->format('H:i')} - {$end->format('H:i')}).",
-                'chargements' => [],
-                'current_interval' => [
-                    'start' => $start->format('H:i'),
-                    'end' => $end->format('H:i')
-                ],
-                // 'total_count' => 0
-            ]);
-        }
-        // Wagon dans le shift → afficher à partir de lui
-        $query->where('datetime_sortieEstime', '>=', $lastWagonChargement->datetime_sortieEstime)
-              ->whereBetween('datetime_sortieEstime', [$start, $end]);
 
-        } else {
-            return response()->json([
-                'message' => "❌ Aucun wagon trouvé avec le numéro {$startFromWagon}.",
-                'chargements' => [],
-                'current_interval' => [
-                    'start' => $start->format('H:i'),
-                    'end' => $end->format('H:i')
-                ],
-                // 'total_count' => 0
-            ]);
-        }
-         // Vérifier le four
-        if ($id_four && $lastWagonChargement->id_four != $id_four) {
-            return response()->json([
-                'message' => "ℹ️ Le wagon {$startFromWagon} existe dans ce shift, mais sur un autre four (Four {$lastWagonChargement->four->num_four}).",
-                'chargements' => [],
-                'current_interval' => ['start' => $start->format('H:i'), 'end' => $end->format('H:i')],
-                // 'total_count' => 0
-            ]);
-        }
-          //si pas de wagon spécifique)
+            if ($lastWagonChargement) {
+                $query->where('datetime_sortieEstime', '>=', $lastWagonChargement->datetime_sortieEstime);
+            }
         } else {
             $query->whereBetween('datetime_sortieEstime', [$start, $end]);
         }
-       if (request()->has('id_four')) {
+
+        if (request()->has('id_four')) {
             $id_four = request()->input('id_four');
             $query->where('id_four', $id_four);
 
-        if ($limit) {
-            $query->limit($limit);
-        } else {
-            if ($id_four == 6) {
+            if ($limit) {
+                $query->limit($limit);
+            } else {
+                if ($id_four == 1) {
                     $query->limit(30);
-                } elseif ($id_four == 7) {
+                } elseif ($id_four == 2) {
                     $query->limit(16);
                 }
+            }
         }
-    }
-       $chargements = $query->get();
-        return response()->json([
-    'chargements' => $chargements,
-    'current_interval' => [
-        'start' => $start->format('H:i'),
-        'end' => $end->format('H:i')
-    ],
-    'total_count' => $chargements->count()
-]);
 
+        $chargements = $query->get()
+                        ->map(function ($chargement) {
+                return [
+                    'id' => $chargement->id,
+                    'wagon_num' => $chargement->wagon->num_wagon ?? 'N/A',
+                    'wagon_type' => $chargement->wagon->type_wagon ?? 'N/A',
+                    'four_num' => $chargement->four->num_four ?? 'N/A',
+                    'total_pieces' => $chargement->details->sum('quantite'),
+                    'heure_sortie' => $chargement->datetime_sortieEstime
+                        ? Carbon::parse($chargement->datetime_sortieEstime)->format('H:i')
+                        : 'N/A',
+                    'statut' => $chargement->statut,
+                    //'sorti' => $chargement->statut === 'sorti'
+                ];
+            });
+
+        return response()->json([
+            'chargements' => $chargements,
+            'current_interval' => [
+                'start' => $start->format('H:i'),
+                'end' => $end->format('H:i')
+            ],
+            'total_count' => $chargements->count()
+        ]);
     }
+
     public function calculateTrieursNeeded()
     {
         $startFromWagon = request()->input('start_from_wagon');
@@ -839,8 +905,8 @@ public function getPopupDetails($id)
         $fourData = $this->calculateForFour($idFour, $chargements);
 
         return response()->json([
-            'f3' => $idFour == 6 ? $fourData : null,
-            'f4' => $idFour == 7 ? $fourData : null,
+            'f3' => $idFour == 1 ? $fourData : null,
+            'f4' => $idFour == 2 ? $fourData : null,
             'wagons' => $chargements->map(function ($chargement) {
                 return [
                     'id' => $chargement->id,
@@ -854,6 +920,7 @@ public function getPopupDetails($id)
             })
         ]);
     }
+
     private function calculateForFour($idFour, $chargements)
     {
         $famillesData = [];
@@ -861,14 +928,12 @@ public function getPopupDetails($id)
 
         foreach ($chargements as $chargement) {
             foreach ($chargement->details as $detail) {
-                $famille = $detail->famille;
-                $idFamille = $detail->id_famille; 
+                $idFamille = $detail->id_famille;
                 $quantite = $detail->quantite;
-                 if (in_array(strtolower($famille->nom_famille), ['balaste', 'couvercles'])) {
+                $famille = $detail->famille;
+                if (in_array(strtolower($famille->nom_famille), ['balaste', 'couvercles'])) {
                     continue; // saute cette famille
                 }
-                $famille = $detail->famille;
-
                 if (!isset($famillesData[$idFamille])) {
                     $famillesData[$idFamille] = [
                         'id_famille' => $idFamille,
@@ -925,34 +990,38 @@ public function getPopupDetails($id)
     // Calcul pour F3
     $f3Chargements = Chargement::with(['details' => function($query) {
         $query->whereHas('famille', function($q) {
-            $q->where('nom_famille', 'like', '%couvercle%');
+            $q->where('nom_famille', 'not like', '%couvercles%')
+            ->where('nom_famille', 'not like', '%Balaste%');
         });
     }])
-    ->where('id_four', 6)
+    ->where('id_four', 1)
     ->whereIn('statut', ['en attente', 'en cuisson', 'prêt à sortir', 'sorti'])
-    ->whereBetween('datetime_sortieEstime', [$start, $end])
+    ->whereBetween('datetime_chargement', [$start, $end])
     ->get();
 
     $f3TotalPieces = $f3Chargements->sum(function($chargement) {
         return $chargement->details->sum('quantite');
     });
-    $f3Density = $f3TotalPieces / 30;
+    $f3Count = $f3Chargements->count();
+    $f3Density = $f3TotalPieces / $f3Count;
 
     // Calcul pour F4
     $f4Chargements = Chargement::with(['details' => function($query) {
         $query->whereHas('famille', function($q) {
-            $q->where('nom_famille', 'like', '%couvercle%');
+            $q->where('nom_famille', 'not like', '%Couvercles%')
+            ->where('nom_famille', 'not like', '%Balaste%');
         });
     }])
-    ->where('id_four', 7)
+    ->where('id_four', 2)
     ->whereIn('statut', ['en attente', 'en cuisson', 'prêt à sortir', 'sorti'])
-    ->whereBetween('datetime_sortieEstime', [$start, $end])
+    ->whereBetween('datetime_chargement', [$start, $end])
     ->get();
 
     $f4TotalPieces = $f4Chargements->sum(function($chargement) {
         return $chargement->details->sum('quantite');
     });
-    $f4Density = $f4TotalPieces / 16;
+    $f4Count = $f4Chargements->count();
+    $f4Density = $f4TotalPieces / $f4Count;
 
     return response()->json([
         'global_density' => round($f3Density + $f4Density, 1),
@@ -1029,9 +1098,9 @@ public function getPopupDetails($id)
             $id_four = request()->input('id_four');
             $query->where('id_four', $id_four);
 
-            if ($id_four == 6) {
+            if ($id_four == 1) {
                 $query->limit(30);
-            } elseif ($id_four == 7) {
+            } elseif ($id_four == 2) {
                 $query->limit(16);
             }
         }
@@ -1098,9 +1167,9 @@ public function getPopupDetails($id)
 
         foreach ($chargements as $chargement) {
             foreach ($chargement->details as $detail) {
+                $famille = $detail->famille;
                 $id_famille = $detail->id_famille;
                 $quantite = $detail->quantite;
-                $famille = $detail->famille;
 
                 if (!isset($famillesData[$id_famille])) {
                     $famillesData[$id_famille] = [
@@ -1132,34 +1201,45 @@ public function getPopupDetails($id)
     public function getTotalPiecesByShift()
 {
     try {
-        $now = Carbon::now();
-        $today5am = $now->copy()->setTime(6, 0, 0);
+        $now = Carbon::now()->addDay(-1);
+        $shift3start = $now->copy()->setTime(22, 0, 0);
 
         // Si l'heure actuelle est avant 5h du matin, on considère que le "jour" commence à 5h de la veille
-        if ($now->hour < 6) {
+        /*if ($now->hour < 6) {
             $today5am = $now->copy()->subDay()->setTime(6, 0, 0);
-        }
+        }*/
 
-        $shift1End = $today5am->copy()->addHours(8); // 5h-14h
+        $shift3End = $shift3start->copy()->addDay()->setTime(6, 0, 0); // 22h-5h du lendemain
+        $shift1End = $shift3End->copy()->addHours(8); // 6h-14h
         $shift2End = $shift1End->copy()->addHours(8); // 14h-22h
-        $shift3End = $today5am->copy()->addDay()->setTime(6, 0, 0); // 22h-5h du lendemain
 
+        /*$today10pm = $now->copy()->setTime(22, 0, 0);
+        $shift3finish = $today10pm->copy()->addDay()->setTime(6, 0, 0); // 22h-6h du lendemain
+        $shift1finish = $shift3finish->copy()->addHours(8); // 6h-14h
+        $shift2finish = $shift1finish->copy()->addHours(8); //*/
         $results = DB::table('detail_chargements as d')
             ->join('chargements as c', 'd.id_chargement', '=', 'c.id')
             ->select(
                 DB::raw("
                     CASE
-                        WHEN c.datetime_chargement BETWEEN '{$today5am->format('Y-m-d H:i:s')}' AND '{$shift1End->format('Y-m-d H:i:s')}' THEN 'shift1'
+                        WHEN c.datetime_chargement BETWEEN '{$shift3End->format('Y-m-d H:i:s')}' AND '{$shift1End->format('Y-m-d H:i:s')}' THEN 'shift1'
                         WHEN c.datetime_chargement BETWEEN '{$shift1End->format('Y-m-d H:i:s')}' AND '{$shift2End->format('Y-m-d H:i:s')}' THEN 'shift2'
-                        WHEN c.datetime_chargement BETWEEN '{$shift2End->format('Y-m-d H:i:s')}' AND '{$shift3End->format('Y-m-d H:i:s')}' THEN 'shift3'
+                        WHEN c.datetime_chargement BETWEEN '{$shift3start->format('Y-m-d H:i:s')}' AND '{$shift3End->format('Y-m-d H:i:s')}' THEN 'shift3'
                         ELSE 'other'
                     END AS shift_label
                 "),
                 DB::raw('SUM(d.quantite) as total')
             )
-            ->where('c.datetime_chargement', '>=', $today5am)
-            ->where('c.datetime_chargement', '<=', $shift3End)
-            ->groupBy('shift_label')
+            ->where('c.datetime_chargement', '>=', $shift3start)
+            ->where('c.datetime_chargement', '<=', $shift2End)
+            ->groupBy(DB::raw("
+                CASE
+                    WHEN c.datetime_chargement BETWEEN '{$shift3End->format('Y-m-d H:i:s')}' AND '{$shift1End->format('Y-m-d H:i:s')}' THEN 'shift1'
+                    WHEN c.datetime_chargement BETWEEN '{$shift1End->format('Y-m-d H:i:s')}' AND '{$shift2End->format('Y-m-d H:i:s')}' THEN 'shift2'
+                    WHEN c.datetime_chargement BETWEEN '{$shift3start->format('Y-m-d H:i:s')}' AND '{$shift3End->format('Y-m-d H:i:s')}' THEN 'shift3'
+                    ELSE 'other'
+                END
+            "))
             ->pluck('total', 'shift_label');
 
         // Ensure all shifts exist even if zero
@@ -1167,6 +1247,10 @@ public function getPopupDetails($id)
             'shift1' => $results['shift1'] ?? 0,
             'shift2' => $results['shift2'] ?? 0,
             'shift3' => $results['shift3'] ?? 0,
+            'today5am' => $shift3start->format('Y-m-d H:i:s'),
+            'shift3End' => $shift3End->format('Y-m-d H:i:s'),
+            'shift1End' => $shift1End->format('Y-m-d H:i:s'),
+            'shift2End' => $shift2End->format('Y-m-d H:i:s')
         ]);
 
     } catch (\Exception $e) {
@@ -1177,123 +1261,96 @@ public function getPopupDetails($id)
         ], 500);
     }
 }
-public function update(Request $request, Chargement $chargement)
-{
-    $validated = $request->validate([
-        'id_wagon' => 'required|exists:wagons,id_wagon',
-        'id_four'  => 'required|exists:fours,id_four',
-        'datetime_chargement' => 'required|date',
-        'statut' => 'required|string',
-        'familles' => 'sometimes|array',
-        'familles.*.id_famille' => 'required|exists:familles,id_famille',
-        'familles.*.quantite' => 'required|integer',
-    ]);
-    // Validation supplémentaire pour la quantité
-    if (isset($validated['familles'])) {
-        foreach ($validated['familles'] as $famille) {
-            if ($famille['quantite'] <= 0) {
+    public function update(Request $request, Chargement $chargement)
+    {
+    //   $changed = false;
+        $validated = $request->validate([
+            'id_wagon' => 'required|exists:wagons,id_wagon',
+            'id_four'  => 'required|exists:fours,id_four',
+            'datetime_chargement' => 'required|date',
+            'statut' => 'required|string',
+            'familles' => 'sometimes|array',
+            'familles.*.id_famille' => 'required|exists:familles,id_famille',
+            'familles.*.quantite' => 'required|integer',
+        ]);
+        // Validation supplémentaire pour la quantité
+        if (isset($validated['familles'])) {
+            foreach ($validated['familles'] as $famille) {
+                if ($famille['quantite'] <= 0) {
+                    return response()->json([
+                        'message' => "La quantité pour la famille '{$famille['id_famille']}' doit être supérieure à 0."
+                    ], 422);
+                }
+            }
+        }
+        // Vérifier doublons dans id_famille
+        if (isset($validated['familles'])) {
+            $ids = array_column($validated['familles'], 'id_famille');
+
+            if (count($ids) !== count(array_unique($ids))) {
                 return response()->json([
-                    'message' => "La quantité pour la famille '{$famille['id_famille']}' doit être supérieure à 0."
+                    'message' => "Vous avez ajouté la même famille plusieurs fois."
                 ], 422);
             }
         }
-    }
-   // Vérifier doublons dans id_famille
-    if (isset($validated['familles'])) {
-        $ids = array_column($validated['familles'], 'id_famille');
+        if (isset($validated['familles'])) {
 
-        if (count($ids) !== count(array_unique($ids))) {
+        // Vérifier qu'il y a au moins une famille avec quantité > 0
+        $famillesValides = array_filter($validated['familles'], fn($f) => $f['quantite'] > 0);
+
+        if (empty($famillesValides)) {
             return response()->json([
-                'message' => "Vous avez ajouté la même famille plusieurs fois."
+                'message' => "Vous devez ajouter au moins une famille avec une quantité supérieure à 0."
             ], 422);
         }
-    }
-    if (isset($validated['familles'])) {
-
-    // Vérifier qu'il y a au moins une famille avec quantité > 0
-    $famillesValides = array_filter($validated['familles'], fn($f) => $f['quantite'] > 0);
-
-    if (empty($famillesValides)) {
-        return response()->json([
-            'message' => "Vous devez ajouter au moins une famille avec une quantité supérieure à 0."
-        ], 422);
-    }
-    // Met à jour les champs simples
-    $chargement->update($validated);
-       
-    // --- Recalculer datetime_sortieEstime en fonction de datetime_chargement et du four --- 
-    $chargement->datetime_sortieEstime = $this->calculateSortieEstime(
-    $chargement->id_four, $chargement->datetime_chargement);
-    $chargement->save(); 
+        // Met à jour les champs simples
+        $chargement->update($validated);
         
-    // Si familles envoyées, mettre à jour les détails
-    if (isset($validated['familles'])) {
-        $chargement->details()->delete();
-        foreach ($validated['familles'] as $famille) {
-            $chargement->details()->create([
-                'id_famille' => $famille['id_famille'],
-                'quantite' => $famille['quantite'],
-            ]);
+        // --- Recalculer datetime_sortieEstime en fonction de datetime_chargement et du four --- 
+        $chargement->datetime_sortieEstime = $this->calculateSortieEstime(
+        $chargement->id_four, $chargement->datetime_chargement);
+        $chargement->save(); 
+            
+        // Si familles envoyées, mettre à jour les détails
+        if (isset($validated['familles'])) {
+            $chargement->details()->delete();
+            foreach ($validated['familles'] as $famille) {
+                $chargement->details()->create([
+                    'id_famille' => $famille['id_famille'],
+                    'quantite' => $famille['quantite'],
+                ]);
+            }
+        }
+    //     // Comparer les champs simples
+    // if ($chargement->id_wagon != $validated['id_wagon'] ||
+    //     $chargement->id_four != $validated['id_four'] ||
+    //     $chargement->datetime_chargement != $validated['datetime_chargement'] ||
+    //     $chargement->statut != $validated['statut']) {
+    //     $changed = true;
+    //     return response()->json([
+    //     'message' => 'Chargement mis à jour avec succès',
+    //     ]);
+    // }
+        return response()->json([
+            'message' => 'Chargement mis à jour avec succès',
+            'data' => $chargement->load('details.famille', 'wagon', 'four')
+        ]);
+    }
+    }
+    private function calculateSortieEstime ($idFour,$datetimeChargement)
+    {
+    $chargementTime = Carbon::parse($datetimeChargement);
+        // Durées connues pour les fours 3 et 4
+        $durations = [
+            1 => '18:07:40',
+            2 => '33:08:00',
+        ];
+
+        // Si le four est reconnu, calculer la sortie
+        if (isset($durations[$idFour])) {
+            $interval = CarbonInterval::createFromFormat('H:i:s', $durations[$idFour]);
+            return $chargementTime->copy()->add($interval);
         }
     }
-    
-    return response()->json([
-        'message' => 'Chargement mis à jour avec succès',
-        'data' => $chargement->load('details.famille', 'wagon', 'four')
-    ]);
-    }     
-}
-private function calculateSortieEstime ($idFour,$datetimeChargement)
-{
-   $chargementTime = Carbon::parse($datetimeChargement);
-    // Durées connues pour les fours 3 et 4
-    $durations = [
-        6 => '18:07:40',
-        7 => '33:08:00',
-    ];
-
-    // Si le four est reconnu, calculer la sortie
-    if (isset($durations[$idFour])) {
-        $interval = CarbonInterval::createFromFormat('H:i:s', $durations[$idFour]);
-        return $chargementTime->copy()->add($interval);
-    }
-}
-public function destroy(Chargement $chargement)
-{
-    try {
-        $user = auth()->user();
-        if (!$user) {
-        return response()->json(['message' => 'Non authentifié'], 401);
-    }
-        // Enregistrer une copie dans la table archives
-        DB::table('archives_chargements')->insert([
-            'id_chargement' => $chargement->id,
-            'id_user' => $chargement->id_user,
-            'id_wagon' => $chargement->id_wagon,
-            'id_four' => $chargement->id_four,
-            'datetime_chargement' => $chargement->datetime_chargement,
-            'datetime_sortieEstime' => $chargement->datetime_sortieEstime,
-            'statut' => $chargement->statut,
-            'matricule_suppression' => $user->matricule ,
-            'date_suppression' => now(),
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
-        // Supprimer les détails liés
-        $chargement->details()->delete();
-
-        // Supprimer le chargement
-        $chargement->delete();
-
-        return response()->json([
-            'message' => "Chargement archivé et supprimé avec succès ✅"
-        ]);
-    } catch (\Exception $e) {
-        return response()->json([
-            'message' => "Erreur : impossible de supprimer le chargement",
-            'error' => $e->getMessage()
-        ], 500);
-    }
-}
 
 }

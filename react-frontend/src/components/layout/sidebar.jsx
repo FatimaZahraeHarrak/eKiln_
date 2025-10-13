@@ -2,9 +2,12 @@ import * as React from 'react';
 import PropTypes from 'prop-types';
 import { createTheme } from '@mui/material/styles';
 import DashboardIcon from '@mui/icons-material/Dashboard';
+import SupervisorAccountIcon from '@mui/icons-material/SupervisorAccount';
 import { AppProvider } from '@toolpad/core/AppProvider';
 import { DashboardLayout } from '@toolpad/core/DashboardLayout';
 import PeopleIcon from '@mui/icons-material/People';
+import GroupsIcon from '@mui/icons-material/Groups';
+import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
 import SettingsApplicationsIcon from '@mui/icons-material/SettingsApplications';
 import HistoryIcon from '@mui/icons-material/History';
 import SubwayIcon from '@mui/icons-material/Subway';
@@ -12,7 +15,6 @@ import DescriptionIcon from '@mui/icons-material/Description';
 import LogoutIcon from '@mui/icons-material/Logout';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate, useLocation } from 'react-router-dom';
-import ArchiveIcon from '@mui/icons-material/Archive';
 import Cookies from 'js-cookie';
 
 const appTheme = createTheme({
@@ -39,10 +41,10 @@ const NAVIGATION = [
     path: '/dashboard'
   },
   {
-    segment: 'manage-users',
-    title: 'Manage Users',
-    icon: <PeopleIcon />,
-    path: '/manage-users'
+    segment: 'chefDashboard',
+    title: 'Chef d\'équipe',
+    icon: <SupervisorAccountIcon />,
+    path: '/chefDashboard'
   },
   {
     segment: 'settings',
@@ -71,6 +73,12 @@ const NAVIGATION = [
     ],
   },
   {
+    segment: 'manage-users',
+    title: 'Manage Users',
+    icon: <GroupsIcon />,
+    path: '/manage-users'
+  },
+  {
     segment: 'wagon_visualization',
     title: 'Wagon Visualization',
     icon: <SubwayIcon />,
@@ -82,23 +90,10 @@ const NAVIGATION = [
     icon: <HistoryIcon />,
     path: '/history'
   },
-   {
-    segment: 'historique-chargement',
-    title: 'Historique Chargement',
-    icon: <HistoryIcon />,
-    path: '/historique-chargement'
-  },
-  {
-    segment: 'archives-chargements',
-    title: 'Archives Chargements',
-    icon: <ArchiveIcon />, 
-    path: '/archives-chargements'
-},
-
-  {
+  /*{
     segment: 'divider',
     type: 'divider',
-  },
+  },*/
   // Dans sidebar.jsx, modifiez la partie NAVIGATION :
 {
   segment: 'logout',
@@ -170,6 +165,11 @@ const Sidebar = ({ children, window }) => {
   return (
     <AppProvider
       navigation={NAVIGATION}
+        branding={{
+          //logo: <img src="https://mui.com/static/logo.png" alt="MUI logo" />,
+          title: 'eKiln',
+          homeUrl: '/dashboard',
+        }}
       router={router}
       theme={appTheme}
       window={demoWindow}

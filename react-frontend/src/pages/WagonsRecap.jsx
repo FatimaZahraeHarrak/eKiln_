@@ -37,7 +37,10 @@ const WagonsRecap = () => {
     const fetchChargements = async () => {
       try {
         setLoading(true);
-        const response = await axios.get('http://localhost:8000/api/chargements/last-30-wagons');
+        const token = localStorage.getItem('token');
+        const response = await axios.get('http://localhost:8000/api/chargements/last-30-wagons',{
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
         setChargements(response.data);
       } catch (error) {
         console.error('Error fetching last 30 wagons:', error);

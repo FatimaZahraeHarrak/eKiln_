@@ -13,9 +13,9 @@ import axios from 'axios';
 
 export default function ShiftChart() {
   const [data, setData] = useState([
-    { shift: '5am-2pm', total: 0 },
+    { shift: '6am-2pm', total: 0 },
     { shift: '2pm-10pm', total: 0 },
-    { shift: '10pm-5am', total: 0 },
+    { shift: '10pm-6am', total: 0 },
   ]);
 
   // Modern gradient colors for the bars
@@ -28,24 +28,26 @@ export default function ShiftChart() {
   useEffect(() => {
     const source = axios.CancelToken.source();
     async function fetchData() {
-      try {
+      try {        
+        const token = localStorage.getItem('token');
         const response = await axios.get('http://localhost:8000/api/total-pieces-by-shift', {
           cancelToken: source.token,
           headers: {
+            Authorization: `Bearer ${token}`,
             'Cache-Control': 'no-cache',
             'Pragma': 'no-cache'
           },
-          timeout: 10000 // 10 seconds timeout
+          timeout: 60000 // 60 seconds timeout
         });
         
         const json = response.data;
-        console.log(json)
+        console.log("shifts",json)
 
         // Map API response to shift labels
         const chartData = [
-          { shift: '5am-2pm', total: json?.shift1 || 0 },
+          { shift: '6am-2pm', total: json?.shift1 || 0 },
           { shift: '2pm-10pm', total: json?.shift2 || 0 },
-          { shift: '10pm-5am', total: json?.shift3 || 0 },
+          { shift: '10pm-6am', total: json?.shift3 || 0 },
         ];
 
         setData(chartData);

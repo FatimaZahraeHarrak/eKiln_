@@ -17,7 +17,7 @@ login: async (matricule, password) => {
   // Déconnexion utilisateur
   logout: async () => {
     try {
-      await api.post('/api/logout')
+      await api.post('/logout')
       return true
     } catch (error) {
       console.error('Erreur lors de la déconnexion', error)
